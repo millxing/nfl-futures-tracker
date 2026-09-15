@@ -182,7 +182,7 @@
         sugg.hidden = true;
         return;
       }
-      pool = pool.slice(0, 12);
+      if (series === "all") pool = pool.slice(0, 20);
       sugg.innerHTML = "";
       pool.forEach((m) => {
         const b = document.createElement("button");
