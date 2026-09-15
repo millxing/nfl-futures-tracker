@@ -6,8 +6,6 @@
     "Pro Football: 2027 Champion": "Super Bowl",
     "Pro Football: 2027 AFC Champion": "AFC Champion",
     "Pro Football: 2027 NFC Champion": "NFC Champion",
-    "Pro Football: 2026-27 AFC #1 Seed": "AFC #1 Seed",
-    "Pro Football: 2026-27 NFC #1 Seed": "NFC #1 Seed",
     "Pro Football: Team to Make Postseason": "Make Playoffs",
     "Pro Football: AFC East Champion": "AFC East",
     "Pro Football: AFC North Champion": "AFC North",

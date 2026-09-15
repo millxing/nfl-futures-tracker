@@ -27,8 +27,6 @@ SERIES_ORDER = [
     "Pro Football: 2027 Champion",
     "Pro Football: 2027 AFC Champion",
     "Pro Football: 2027 NFC Champion",
-    "Pro Football: 2026-27 AFC #1 Seed",
-    "Pro Football: 2026-27 NFC #1 Seed",
     "Pro Football: Team to Make Postseason",
     "Pro Football: AFC East Champion",
     "Pro Football: AFC North Champion",
@@ -46,7 +44,13 @@ SERIES_ORDER = [
     "Pro Football: 2026-27 AP Coach of the Year Winner",
     "Pro Football: 2026-27 AP Comeback Player of the Year Winner",
 ]
-TEAM_SERIES = set(SERIES_ORDER[:14])
+TEAM_SERIES = set(SERIES_ORDER[:12])
+
+# Tracked on Polymarket but too illiquid for prices to read as probabilities.
+EXCLUDED_SERIES = {
+    "Pro Football: 2026-27 AFC #1 Seed",
+    "Pro Football: 2026-27 NFC #1 Seed",
+}
 
 FNAME_RE = re.compile(
     r"nfl_markets_snapshot_(\d{4}-\d{2}-\d{2})_(\d{4})_E[SD]T\.xlsx$"
@@ -86,6 +90,8 @@ def read_snapshot(path):
     out = {}
     for row in rows:
         if row is None or row[idx["market_id"]] is None:
+            continue
+        if str(row[idx["event_title"]]).strip() in EXCLUDED_SERIES:
             continue
         mid = str(row[idx["market_id"]])
         price = row[idx["price"]]
