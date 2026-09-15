@@ -37,7 +37,7 @@
   let DATA = null;
   const selectedMarkets = []; // market ids, insertion order = color slot
 
-  fetch("data/data.json")
+  fetch("data/data.json?t=" + Date.now())
     .then((r) => r.json())
     .then((d) => {
       DATA = d;
