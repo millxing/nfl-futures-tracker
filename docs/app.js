@@ -103,11 +103,21 @@
     }
   }
 
+  const moversSort = { key: "delta", asc: false };
+
   function bindMoversControls() {
     ["from-select", "to-select", "series-filter"].forEach((id) =>
       $(id).addEventListener("change", renderMovers)
     );
     $("search-input").addEventListener("input", renderMovers);
+    document.querySelectorAll(".col-sort").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const key = btn.dataset.sort;
+        if (moversSort.key === key) moversSort.asc = !moversSort.asc;
+        else { moversSort.key = key; moversSort.asc = false; }
+        renderMovers();
+      });
+    });
   }
 
   function renderMovers() {
@@ -123,8 +133,20 @@
         const a = m.prices[fromIdx];
         const b = m.prices[toIdx];
         return { m, a, b, d: a != null && b != null ? b - a : null };
-      })
-      .sort((x, y) => Math.abs(y.d ?? -1) - Math.abs(x.d ?? -1));
+      });
+
+    const keyFn = { delta: (r) => (r.d == null ? null : Math.abs(r.d)), from: (r) => r.a, to: (r) => r.b }[moversSort.key];
+    rows.sort((x, y) => {
+      const kx = keyFn(x);
+      const ky = keyFn(y);
+      if (kx == null) return 1;      // nulls always sink to the bottom
+      if (ky == null) return -1;
+      return moversSort.asc ? kx - ky : ky - kx;
+    });
+    document.querySelectorAll(".col-sort").forEach((btn) => {
+      btn.classList.toggle("active", btn.dataset.sort === moversSort.key);
+      btn.classList.toggle("asc", btn.dataset.sort === moversSort.key && moversSort.asc);
+    });
 
     const maxAbs = Math.max(0.5, ...rows.map((r) => Math.abs(r.d ?? 0)));
     const list = $("movers-list");
@@ -142,7 +164,8 @@
       btn.innerHTML = `
         <span class="rank">${i + 1}</span>
         <span class="name">${esc(r.m.name)}${series === "all" ? `<span class="stag">${esc(shortSeries(r.m.series))}</span>` : ""}</span>
-        <span class="prices">${fmt(r.a)} → ${fmt(r.b)}</span>
+        <span class="price">${fmt(r.a)}</span>
+        <span class="price">${fmt(r.b)}</span>
         <span class="barcell"><span class="axis"></span>${
           d == null || Math.abs(d) < 0.05
             ? ""
@@ -159,7 +182,8 @@
 
     const fromLabel = DATA.snapshots[fromIdx].label;
     const toLabel = DATA.snapshots[toIdx].label;
-    $("movers-summary").textContent = `${rows.length} markets · sorted by absolute change, ${fromLabel} → ${toLabel} · click a row to chart it`;
+    const sortName = { delta: "absolute change", from: "From price", to: "To price" }[moversSort.key];
+    $("movers-summary").textContent = `${rows.length} markets · ${fromLabel} → ${toLabel} · sorted by ${sortName} (${moversSort.asc ? "low to high" : "high to low"}) · click a row to chart it`;
     if (fromIdx === toIdx) {
       $("movers-summary").textContent += " · from and to are the same snapshot";
     }

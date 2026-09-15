@@ -137,7 +137,7 @@ select:focus-visible, input:focus-visible, .tab:focus-visible {
 
 .movers-header, .mover-row {
   display: grid;
-  grid-template-columns: 34px minmax(200px, 1.15fr) 110px 2fr 58px;
+  grid-template-columns: 34px minmax(200px, 1.15fr) 52px 52px 2fr 58px;
   gap: 10px;
   align-items: center;
 }
@@ -150,7 +150,22 @@ select:focus-visible, input:focus-visible, .tab:focus-visible {
   padding: 0 12px 6px;
   border-bottom: 1px solid var(--baseline);
 }
-.col-delta, .col-prices { text-align: right; }
+.col-delta, .col-from, .col-to { text-align: right; }
+.col-bar { text-align: center; }
+.col-sort {
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+  color: var(--ink-muted);
+  cursor: pointer;
+}
+.col-sort:hover { color: var(--ink-2); }
+.col-sort.active { color: var(--accent); }
+.col-sort.active::after { content: " ▾"; }
+.col-sort.active.asc::after { content: " ▴"; }
 
 .movers-list { border-radius: 0 0 8px 8px; overflow: hidden; }
 .mover-row {
@@ -183,7 +198,7 @@ select:focus-visible, input:focus-visible, .tab:focus-visible {
   padding: 0 5px;
   vertical-align: 1px;
 }
-.mover-row .prices {
+.mover-row .price {
   font-family: var(--mono);
   font-size: 0.78rem;
   color: var(--ink-2);
@@ -337,5 +352,5 @@ footer .sep { margin: 0 8px; }
 
 @media (max-width: 720px) {
   .movers-header, .mover-row { grid-template-columns: 26px minmax(130px, 1.3fr) 1.4fr 54px; }
-  .col-prices, .mover-row .prices { display: none; }
+  .col-from, .col-to, .mover-row .price { display: none; }
 }
