@@ -1,0 +1,393 @@
+/* NFL Futures Tracker */
+(() => {
+  "use strict";
+
+  const SHORT_SERIES = {
+    "Pro Football: 2027 Champion": "Super Bowl",
+    "Pro Football: 2027 AFC Champion": "AFC Champion",
+    "Pro Football: 2027 NFC Champion": "NFC Champion",
+    "Pro Football: 2026-27 AFC #1 Seed": "AFC #1 Seed",
+    "Pro Football: 2026-27 NFC #1 Seed": "NFC #1 Seed",
+    "Pro Football: Team to Make Postseason": "Make Playoffs",
+    "Pro Football: AFC East Champion": "AFC East",
+    "Pro Football: AFC North Champion": "AFC North",
+    "Pro Football: AFC South Champion": "AFC South",
+    "Pro Football: AFC West Champion": "AFC West",
+    "Pro Football: NFC East Champion": "NFC East",
+    "Pro Football: NFC North Champion": "NFC North",
+    "Pro Football: NFC South Champion": "NFC South",
+    "Pro Football: NFC West Champion": "NFC West",
+    "Pro Football: 2026 MVP Winner": "MVP",
+    "Pro Football: 2026-27 AP Offensive Player of the Year Winner": "Off. Player of Year",
+    "Pro Football: 2026-27 AP Defensive Player of the Year Winner": "Def. Player of Year",
+    "Pro Football: 2026-27 AP Offensive Rookie of the Year Winner": "Off. Rookie of Year",
+    "Pro Football: 2026-27 AP Defensive Rookie of the Year Winner": "Def. Rookie of Year",
+    "Pro Football: 2026-27 AP Coach of the Year Winner": "Coach of Year",
+    "Pro Football: 2026-27 AP Comeback Player of the Year Winner": "Comeback Player",
+  };
+  const shortSeries = (s) => SHORT_SERIES[s] || s.replace(/^Pro Football:\s*/, "");
+
+  // Categorical slots (validated dark-mode order) for time-series lines.
+  const SERIES_COLORS = ["#3987e5", "#d95926", "#199e70", "#c98500", "#d55181", "#008300", "#9085e9", "#e66767"];
+  const MAX_LINES = 8;
+
+  const $ = (id) => document.getElementById(id);
+  const fmt = (v) => (v == null ? "—" : v.toFixed(1));
+
+  let DATA = null;
+  const selectedMarkets = []; // market ids, insertion order = color slot
+
+  fetch("data/data.json")
+    .then((r) => r.json())
+    .then((d) => {
+      DATA = d;
+      init();
+    })
+    .catch((e) => {
+      $("movers-list").innerHTML = `<div class="empty-note">Failed to load data: ${e}</div>`;
+    });
+
+  function init() {
+    $("gen-note").textContent = `Data generated ${DATA.generated} · ${DATA.markets.length} markets · ${DATA.snapshots.length} snapshots`;
+    buildSnapshotSelects();
+    buildSeriesFilters();
+    bindTabs();
+    bindMoversControls();
+    bindTimeSeriesControls();
+    renderMovers();
+    renderTimeSeries();
+  }
+
+  /* ---------------- tabs ---------------- */
+
+  function bindTabs() {
+    document.querySelectorAll(".tab").forEach((tab) => {
+      tab.addEventListener("click", () => switchView(tab.dataset.view));
+    });
+  }
+
+  function switchView(view) {
+    document.querySelectorAll(".tab").forEach((t) => {
+      const on = t.dataset.view === view;
+      t.classList.toggle("active", on);
+      t.setAttribute("aria-selected", on);
+    });
+    document.querySelectorAll(".view").forEach((v) => v.classList.remove("active"));
+    $(`view-${view}`).classList.add("active");
+    if (view === "series") renderTimeSeries();
+  }
+
+  /* ---------------- movers view ---------------- */
+
+  function buildSnapshotSelects() {
+    const from = $("from-select");
+    const to = $("to-select");
+    DATA.snapshots.forEach((s, i) => {
+      from.add(new Option(s.label, i));
+      to.add(new Option(s.label, i));
+    });
+    from.value = 0;
+    to.value = DATA.snapshots.length - 1;
+  }
+
+  function buildSeriesFilters() {
+    const teamSet = new Set(DATA.teamSeries);
+    for (const sel of [$("series-filter"), $("ts-series-select")]) {
+      sel.add(new Option(sel.id === "series-filter" ? "All markets" : "All series", "all"));
+      const teams = document.createElement("optgroup");
+      teams.label = "Team series";
+      const indiv = document.createElement("optgroup");
+      indiv.label = "Individual awards";
+      DATA.series.forEach((s) => {
+        (teamSet.has(s) ? teams : indiv).append(new Option(shortSeries(s), s));
+      });
+      sel.append(teams, indiv);
+    }
+  }
+
+  function bindMoversControls() {
+    ["from-select", "to-select", "series-filter"].forEach((id) =>
+      $(id).addEventListener("change", renderMovers)
+    );
+    $("search-input").addEventListener("input", renderMovers);
+  }
+
+  function renderMovers() {
+    const fromIdx = +$("from-select").value;
+    const toIdx = +$("to-select").value;
+    const series = $("series-filter").value;
+    const q = $("search-input").value.trim().toLowerCase();
+
+    let rows = DATA.markets
+      .filter((m) => series === "all" || m.series === series)
+      .filter((m) => !q || m.name.toLowerCase().includes(q) || m.question.toLowerCase().includes(q))
+      .map((m) => {
+        const a = m.prices[fromIdx];
+        const b = m.prices[toIdx];
+        return { m, a, b, d: a != null && b != null ? b - a : null };
+      })
+      .sort((x, y) => Math.abs(y.d ?? -1) - Math.abs(x.d ?? -1));
+
+    const maxAbs = Math.max(0.5, ...rows.map((r) => Math.abs(r.d ?? 0)));
+    const list = $("movers-list");
+    list.innerHTML = "";
+    const frag = document.createDocumentFragment();
+
+    rows.forEach((r, i) => {
+      const btn = document.createElement("button");
+      btn.className = "mover-row";
+      btn.type = "button";
+      btn.title = `${r.m.question}\nChart this market`;
+      const d = r.d;
+      const cls = d == null || Math.abs(d) < 0.05 ? "zero" : d > 0 ? "pos" : "neg";
+      const w = d == null ? 0 : (Math.abs(d) / maxAbs) * 50;
+      btn.innerHTML = `
+        <span class="rank">${i + 1}</span>
+        <span class="name">${esc(r.m.name)}${series === "all" ? `<span class="stag">${esc(shortSeries(r.m.series))}</span>` : ""}</span>
+        <span class="prices">${fmt(r.a)} → ${fmt(r.b)}</span>
+        <span class="barcell"><span class="axis"></span>${
+          d == null || Math.abs(d) < 0.05
+            ? ""
+            : `<span class="bar ${d > 0 ? "pos" : "neg"}" style="width:${w}%"></span>`
+        }</span>
+        <span class="delta ${cls}">${d == null ? "—" : (d > 0 ? "+" : "") + d.toFixed(1)}</span>`;
+      btn.addEventListener("click", () => {
+        addMarket(r.m.id, true);
+        switchView("series");
+      });
+      frag.append(btn);
+    });
+    list.append(frag);
+
+    const fromLabel = DATA.snapshots[fromIdx].label;
+    const toLabel = DATA.snapshots[toIdx].label;
+    $("movers-summary").textContent = `${rows.length} markets · sorted by absolute change, ${fromLabel} → ${toLabel} · click a row to chart it`;
+    if (fromIdx === toIdx) {
+      $("movers-summary").textContent += " · from and to are the same snapshot";
+    }
+  }
+
+  /* ---------------- time-series view ---------------- */
+
+  function bindTimeSeriesControls() {
+    const input = $("ts-market-search");
+    const sugg = $("ts-suggestions");
+
+    const update = () => {
+      const q = input.value.trim().toLowerCase();
+      const series = $("ts-series-select").value;
+      let pool = DATA.markets.filter((m) => series === "all" || m.series === series);
+      if (q) pool = pool.filter((m) => m.name.toLowerCase().includes(q) || m.question.toLowerCase().includes(q));
+      if (!q && series === "all") {
+        sugg.hidden = true;
+        return;
+      }
+      pool = pool.slice(0, 12);
+      sugg.innerHTML = "";
+      pool.forEach((m) => {
+        const b = document.createElement("button");
+        b.type = "button";
+        b.innerHTML = `<span>${esc(m.name)}</span><span class="sser">${esc(shortSeries(m.series))}</span>`;
+        b.addEventListener("mousedown", (e) => {
+          e.preventDefault();
+          addMarket(m.id);
+          input.value = "";
+          sugg.hidden = true;
+          renderTimeSeries();
+        });
+        sugg.append(b);
+      });
+      sugg.hidden = pool.length === 0;
+    };
+
+    input.addEventListener("input", update);
+    input.addEventListener("focus", update);
+    input.addEventListener("blur", () => setTimeout(() => (sugg.hidden = true), 150));
+    $("ts-series-select").addEventListener("change", update);
+  }
+
+  function addMarket(id, exclusiveIfFull) {
+    if (selectedMarkets.includes(id)) return;
+    if (selectedMarkets.length >= MAX_LINES) {
+      if (exclusiveIfFull) selectedMarkets.length = 0;
+      else return;
+    }
+    selectedMarkets.push(id);
+    renderTimeSeries();
+  }
+
+  function removeMarket(id) {
+    const i = selectedMarkets.indexOf(id);
+    if (i >= 0) selectedMarkets.splice(i, 1);
+    renderTimeSeries();
+  }
+
+  function renderTimeSeries() {
+    const chips = $("ts-chips");
+    chips.innerHTML = "";
+    selectedMarkets.forEach((id, i) => {
+      const m = DATA.markets.find((x) => x.id === id);
+      const chip = document.createElement("span");
+      chip.className = "chip";
+      chip.innerHTML = `<span class="dot" style="background:${SERIES_COLORS[i]}"></span>
+        <span>${esc(m.name)} <span class="chip-series">· ${esc(shortSeries(m.series))}</span></span>`;
+      const x = document.createElement("button");
+      x.type = "button";
+      x.textContent = "✕";
+      x.setAttribute("aria-label", `Remove ${m.name}`);
+      x.addEventListener("click", () => removeMarket(id));
+      chip.append(x);
+      chips.append(chip);
+    });
+
+    const empty = selectedMarkets.length === 0;
+    $("ts-empty").style.display = empty ? "" : "none";
+    $("ts-chart-wrap").style.display = empty ? "none" : "";
+    $("ts-table-wrap").innerHTML = "";
+    if (empty) return;
+
+    drawChart();
+    drawTable();
+  }
+
+  function drawTable() {
+    const wrap = $("ts-table-wrap");
+    const head = DATA.snapshots.map((s) => `<th>${esc(s.label)}</th>`).join("");
+    const body = selectedMarkets
+      .map((id) => {
+        const m = DATA.markets.find((x) => x.id === id);
+        const cells = m.prices.map((p) => `<td>${fmt(p)}</td>`).join("");
+        return `<tr><td>${esc(m.name)}</td>${cells}</tr>`;
+      })
+      .join("");
+    wrap.innerHTML = `<table><thead><tr><th>Market (%)</th>${head}</tr></thead><tbody>${body}</tbody></table>`;
+  }
+
+  function drawChart() {
+    const svg = $("ts-chart");
+    const wrap = $("ts-chart-wrap");
+    const W = Math.max(320, wrap.clientWidth - 10);
+    const H = 420;
+    svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
+    svg.innerHTML = "";
+
+    const markets = selectedMarkets.map((id) => DATA.markets.find((x) => x.id === id));
+    const n = DATA.snapshots.length;
+    const pad = { top: 18, right: 130, bottom: 34, left: 44 };
+    const iw = W - pad.left - pad.right;
+    const ih = H - pad.top - pad.bottom;
+
+    const allVals = markets.flatMap((m) => m.prices).filter((v) => v != null);
+    let yMax = Math.min(100, Math.ceil((Math.max(5, ...allVals) * 1.12) / 5) * 5);
+    const yMin = 0;
+
+    const xPos = (i) => pad.left + (n === 1 ? iw / 2 : (i / (n - 1)) * iw);
+    const yPos = (v) => pad.top + ih - ((v - yMin) / (yMax - yMin)) * ih;
+
+    const NS = "http://www.w3.org/2000/svg";
+    const el = (tag, attrs, text) => {
+      const e = document.createElementNS(NS, tag);
+      for (const [k, v] of Object.entries(attrs)) e.setAttribute(k, v);
+      if (text != null) e.textContent = text;
+      svg.append(e);
+      return e;
+    };
+
+    // gridlines + y ticks
+    const step = yMax <= 25 ? 5 : yMax <= 50 ? 10 : 20;
+    for (let v = yMin; v <= yMax; v += step) {
+      const y = yPos(v);
+      el("line", { x1: pad.left, x2: W - pad.right, y1: y, y2: y, class: v === 0 ? "axisline" : "gridline" });
+      el("text", { x: pad.left - 8, y: y + 4, "text-anchor": "end", class: "ticktext" }, v + "%");
+    }
+    // x ticks
+    DATA.snapshots.forEach((s, i) => {
+      const anchor = n > 1 && i === 0 ? "start" : n > 1 && i === n - 1 ? "end" : "middle";
+      const x = anchor === "start" ? xPos(i) - 30 : anchor === "end" ? xPos(i) + 30 : xPos(i);
+      el("text", { x, y: H - pad.bottom + 18, "text-anchor": anchor, class: "ticktext" }, s.label);
+    });
+
+    // lines + points
+    markets.forEach((m, mi) => {
+      const color = SERIES_COLORS[mi];
+      let dPath = "";
+      let started = false;
+      m.prices.forEach((p, i) => {
+        if (p == null) { started = false; return; }
+        dPath += `${started ? "L" : "M"}${xPos(i)},${yPos(p)}`;
+        started = true;
+      });
+      if (dPath) el("path", { d: dPath, stroke: color, class: "series-line" });
+      m.prices.forEach((p, i) => {
+        if (p == null) return;
+        el("circle", { cx: xPos(i), cy: yPos(p), r: 4, fill: color, class: "series-pt" });
+      });
+    });
+
+    // direct end labels, collision-shifted
+    const labels = markets
+      .map((m, mi) => {
+        const lastIdx = m.prices.map((p, i) => (p != null ? i : -1)).reduce((a, b) => Math.max(a, b), -1);
+        return lastIdx < 0 ? null : { mi, y: yPos(m.prices[lastIdx]), v: m.prices[lastIdx], name: m.name };
+      })
+      .filter(Boolean)
+      .sort((a, b) => a.y - b.y);
+    for (let i = 1; i < labels.length; i++) {
+      if (labels[i].y - labels[i - 1].y < 14) labels[i].y = labels[i - 1].y + 14;
+    }
+    labels.forEach((L) => {
+      el("text", { x: W - pad.right + 8, y: L.y + 4, fill: SERIES_COLORS[L.mi], class: "end-label" },
+        `${truncate(L.name, 14)} ${L.v.toFixed(1)}`);
+    });
+
+    // hover crosshair + tooltip
+    const tooltip = $("ts-tooltip");
+    const cross = el("line", { x1: 0, x2: 0, y1: pad.top, y2: H - pad.bottom, class: "crosshair", visibility: "hidden" });
+    const overlay = el("rect", { x: pad.left, y: pad.top, width: iw, height: ih, fill: "transparent" });
+
+    overlay.addEventListener("mousemove", (ev) => {
+      const rect = svg.getBoundingClientRect();
+      const mx = ((ev.clientX - rect.left) / rect.width) * W;
+      let idx = 0;
+      let best = Infinity;
+      for (let i = 0; i < n; i++) {
+        const d = Math.abs(xPos(i) - mx);
+        if (d < best) { best = d; idx = i; }
+      }
+      cross.setAttribute("x1", xPos(idx));
+      cross.setAttribute("x2", xPos(idx));
+      cross.setAttribute("visibility", "visible");
+      const rowsHtml = markets
+        .map((m, mi) => ({ m, mi, v: m.prices[idx] }))
+        .filter((r) => r.v != null)
+        .sort((a, b) => b.v - a.v)
+        .map((r) => `<div class="tt-row"><span class="dot" style="background:${SERIES_COLORS[r.mi]}"></span>
+             <span>${esc(truncate(r.m.name, 22))}</span><span class="v">${r.v.toFixed(1)}%</span></div>`)
+        .join("");
+      tooltip.innerHTML = `<div class="tt-date">${esc(DATA.snapshots[idx].label)}</div>${rowsHtml}`;
+      tooltip.hidden = false;
+      const wr = wrap.getBoundingClientRect();
+      let left = ev.clientX - wr.left + 16;
+      if (left + 230 > wr.width) left = ev.clientX - wr.left - 240;
+      tooltip.style.left = left + "px";
+      tooltip.style.top = Math.max(8, ev.clientY - wr.top - 30) + "px";
+    });
+    overlay.addEventListener("mouseleave", () => {
+      tooltip.hidden = true;
+      cross.setAttribute("visibility", "hidden");
+    });
+  }
+
+  window.addEventListener("resize", () => {
+    if (selectedMarkets.length && $("view-series").classList.contains("active")) drawChart();
+  });
+
+  /* ---------------- utils ---------------- */
+
+  function esc(s) {
+    return String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  }
+  function truncate(s, len) {
+    return s.length > len ? s.slice(0, len - 1) + "…" : s;
+  }
+})();
