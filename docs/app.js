@@ -35,6 +35,11 @@
   let DATA = null;
   const selectedMarkets = []; // market ids, insertion order = color slot
 
+  // "Pre Week 1", plus "(partial)" when the snapshot predates the week's last game
+  const snapLabel = (s) => s.label + (s.partial ? " (partial)" : "");
+  // "Pre Week 1 · Sep 10, 8:00 PM ET (partial)" — friendly label with exact time
+  const snapFull = (s) => (s.label === s.time ? s.time : `${s.label} · ${s.time}`) + (s.partial ? " (partial)" : "");
+
   fetch("data/data.json?t=" + Date.now())
     .then((r) => r.json())
     .then((d) => {
@@ -81,8 +86,11 @@
     const from = $("from-select");
     const to = $("to-select");
     DATA.snapshots.forEach((s, i) => {
-      from.add(new Option(s.label, i));
-      to.add(new Option(s.label, i));
+      const optF = new Option(snapLabel(s), i);
+      const optT = new Option(snapLabel(s), i);
+      optF.title = optT.title = s.time;
+      from.add(optF);
+      to.add(optT);
     });
     from.value = 0;
     to.value = DATA.snapshots.length - 1;
@@ -180,8 +188,8 @@
     });
     list.append(frag);
 
-    const fromLabel = DATA.snapshots[fromIdx].label;
-    const toLabel = DATA.snapshots[toIdx].label;
+    const fromLabel = snapFull(DATA.snapshots[fromIdx]);
+    const toLabel = snapFull(DATA.snapshots[toIdx]);
     const sortName = { delta: "absolute change", from: "From price", to: "To price" }[moversSort.key];
     $("movers-summary").textContent = `${rows.length} markets · ${fromLabel} → ${toLabel} · sorted by ${sortName} (${moversSort.asc ? "low to high" : "high to low"}) · click a row to chart it`;
     if (fromIdx === toIdx) {
@@ -274,7 +282,7 @@
 
   function drawTable() {
     const wrap = $("ts-table-wrap");
-    const head = DATA.snapshots.map((s) => `<th>${esc(s.label)}</th>`).join("");
+    const head = DATA.snapshots.map((s) => `<th title="${esc(s.time)}">${esc(snapLabel(s))}</th>`).join("");
     const body = selectedMarkets
       .map((id) => {
         const m = DATA.markets.find((x) => x.id === id);
@@ -326,7 +334,7 @@
     DATA.snapshots.forEach((s, i) => {
       const anchor = n > 1 && i === 0 ? "start" : n > 1 && i === n - 1 ? "end" : "middle";
       const x = anchor === "start" ? xPos(i) - 30 : anchor === "end" ? xPos(i) + 30 : xPos(i);
-      el("text", { x, y: H - pad.bottom + 18, "text-anchor": anchor, class: "ticktext" }, s.label);
+      el("text", { x, y: H - pad.bottom + 18, "text-anchor": anchor, class: "ticktext" }, snapLabel(s));
     });
 
     // lines + points
@@ -386,7 +394,7 @@
         .map((r) => `<div class="tt-row"><span class="dot" style="background:${SERIES_COLORS[r.mi]}"></span>
              <span>${esc(truncate(r.m.name, 22))}</span><span class="v">${r.v.toFixed(1)}%</span></div>`)
         .join("");
-      tooltip.innerHTML = `<div class="tt-date">${esc(DATA.snapshots[idx].label)}</div>${rowsHtml}`;
+      tooltip.innerHTML = `<div class="tt-date">${esc(snapFull(DATA.snapshots[idx]))}</div>${rowsHtml}`;
       tooltip.hidden = false;
       const wr = wrap.getBoundingClientRect();
       let left = ev.clientX - wr.left + 16;

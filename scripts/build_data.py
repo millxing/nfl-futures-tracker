@@ -122,10 +122,19 @@ def main():
     snapshots = []
     per_snapshot = []
     for dt, sid, path in files:
+        # labels.json entry: "Pre Week 1" or {"label": "Mid Week 2", "partial": true}
+        entry = labels.get(sid)
+        if isinstance(entry, str):
+            entry = {"label": entry}
+        elif entry is None:
+            entry = {}
+            print(f"WARNING: no labels.json entry for {sid}; using timestamp label", file=sys.stderr)
         snapshots.append(
             {
                 "id": sid,
-                "label": labels.get(sid, auto_label(dt)),
+                "label": entry.get("label", auto_label(dt)),
+                "time": auto_label(dt),
+                "partial": bool(entry.get("partial")),
                 "et": dt.strftime("%Y-%m-%d %H:%M"),
             }
         )

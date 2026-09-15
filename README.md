@@ -27,15 +27,21 @@ GitHub Pages redeploys automatically on push.
 
 ## Snapshot labels
 
-Snapshots are auto-labeled from the filename date/time ("Sep 10, 8:00 PM ET").
-To use friendly labels ("Pre Week 1"), create `snapshots/labels.json`:
+Each snapshot gets a friendly label from `snapshots/labels.json`; the exact
+date/time (from the filename) is preserved and shown alongside it in the UI.
+Add an entry for every new snapshot — a plain string, or an object with
+`"partial": true` for a mid-week snapshot that predates the week's last game:
 
 ```json
 {
   "2026-09-10_2000": "Pre Week 1",
-  "2026-09-14_0100": "After Week 1 SNF"
+  "2026-09-17_0100": { "label": "Mid Week 2", "partial": true },
+  "2026-09-18_0100": "Post Week 2"
 }
 ```
+
+Partial snapshots are tagged "(partial)" throughout the site. A snapshot with
+no entry falls back to its timestamp label (the build script warns).
 
 ## Layout
 
