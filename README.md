@@ -9,8 +9,13 @@ Site lives in `docs/` (GitHub Pages source). Data pipeline is local.
 
 ## Weekly update workflow
 
-1. Drop the new snapshot xlsx into `snapshots/`
+1. Create the snapshot xlsx in `snapshots/`
    (filename format: `nfl_markets_snapshot_YYYY-MM-DD_HHMM_EDT.xlsx`).
+   Easiest: double-click `snapshot_app/NFL Snapshot.app`, pick the Eastern
+   date/time, click **Create Excel snapshot**. It saves straight into
+   `snapshots/`. (First launch: Control-click → Open, since it's unsigned.
+   Or run `snapshot_app/NFL Snapshot.command` from a terminal.)
+   Add a `labels.json` entry for it (see below).
 2. Rebuild the JSON:
 
    ```bash
@@ -45,6 +50,9 @@ no entry falls back to its timestamp label (the build script warns).
 
 ## Layout
 
+- `snapshot_app/` — local web app that generates a snapshot xlsx for any Eastern
+  date/time from Kalshi + Polymarket history (copied from the KalshiNFL project;
+  needs Python 3 and the Codex-bundled Node via the `node_modules` symlink)
 - `snapshots/` — raw xlsx snapshot files (Polymarket sheet is used; Kalshi ignored)
 - `scripts/build_data.py` — converts all snapshots to `docs/data/data.json`
 - `docs/` — the site: `index.html`, `app.js`, `style.css`, `data/data.json`

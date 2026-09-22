@@ -1,0 +1,23 @@
+#!/bin/zsh
+set -u
+APP_ROOT="${0:A:h:h:h:h}"
+LOG_FILE="/tmp/nfl-snapshot-app.log"
+cd "$APP_ROOT"
+
+if [[ -x /opt/homebrew/bin/python3 ]]; then
+  PYTHON=/opt/homebrew/bin/python3
+elif [[ -x /usr/local/bin/python3 ]]; then
+  PYTHON=/usr/local/bin/python3
+else
+  /usr/bin/osascript -e 'display alert "NFL Snapshot could not start" message "Python 3 was not found. Install Python 3 and try again." as critical'
+  exit 1
+fi
+
+: >| "$LOG_FILE"
+"$PYTHON" "$APP_ROOT/nfl_snapshot_app.py" >>"$LOG_FILE" 2>&1
+STATUS=$?
+
+if (( STATUS != 0 )); then
+  /usr/bin/osascript -e 'display alert "NFL Snapshot stopped unexpectedly" message "Open /tmp/nfl-snapshot-app.log for technical details." as critical'
+fi
+exit $STATUS
