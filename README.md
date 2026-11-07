@@ -1,8 +1,8 @@
 # NFL Futures Tracker
 
-Static GitHub Pages site that shows how each week of NFL games moves Polymarket's
+Static GitHub Pages site that shows how each week of NFL games moves Kalshi and Polymarket
 implied probabilities for end-of-season outcomes (division winners, playoffs,
-Super Bowl, awards). 298 markets across 21 series, snapshotted before and after
+Super Bowl, awards). Markets across 19 series, snapshotted before and after
 each NFL week.
 
 Site lives in `docs/` (GitHub Pages source). Data pipeline is local.
@@ -53,6 +53,24 @@ no entry falls back to its timestamp label (the build script warns).
 - `snapshot_app/` — local web app that generates a snapshot xlsx for any Eastern
   date/time from Kalshi + Polymarket history (copied from the KalshiNFL project;
   needs Python 3 and the Codex-bundled Node via the `node_modules` symlink)
-- `snapshots/` — raw xlsx snapshot files (Polymarket sheet is used; Kalshi ignored)
+- `snapshots/` — raw xlsx snapshot files (both Kalshi and Polymarket sheets are used)
 - `scripts/build_data.py` — converts all snapshots to `docs/data/data.json`
 - `docs/` — the site: `index.html`, `app.js`, `style.css`, `data/data.json`
+
+## Price sources
+
+The Kalshi / Polymarket / Average selector applies to movers, charts, tooltips,
+and tables. Average is the default. Switching sources preserves the row order; changing
+the comparison or clicking a sort heading re-sorts using the selected source. Kalshi uses the historical yes bid/ask
+midpoint; Average is the equal-weight mean of both sources at the same snapshot.
+The build rejects missing or empty Kalshi sheets so future updates cannot silently
+drop Kalshi. Both prices are required for Average; missing observations stay blank (never zero
+or filled forward). Source-only markets appear in their respective source mode.
+
+All existing snapshot workbooks are rebuilt, so Kalshi history starts at the same
+September 10, 2026 snapshot as Polymarket. Markets that opened later retain gaps.
+The saved Kalshi sheets do not include division markets. Matching uses explicit
+2026-season event mappings, team names, and player aliases; unknown Kalshi events
+fail the build instead of silently joining another season.
+
+Validation: `python3 -m unittest discover -s tests -v`.

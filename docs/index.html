@@ -4,12 +4,12 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>NFL Futures Tracker</title>
-<meta name="description" content="How each week of NFL games moves Polymarket's implied probabilities for division winners, playoffs, Super Bowl and awards.">
+<meta name="description" content="How each week of NFL games moves Kalshi and Polymarket implied probabilities for division winners, playoffs, Super Bowl and awards.">
 <link rel="canonical" href="https://millxing.github.io/nfl-futures-tracker/">
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="NFL Futures Tracker">
 <meta property="og:title" content="NFL Futures Tracker">
-<meta property="og:description" content="How each week of NFL games moves Polymarket's implied probabilities for division winners, playoffs, Super Bowl and awards.">
+<meta property="og:description" content="How each week of NFL games moves Kalshi and Polymarket implied probabilities for division winners, playoffs, Super Bowl and awards.">
 <meta property="og:url" content="https://millxing.github.io/nfl-futures-tracker/">
 <meta property="og:image" content="https://millxing.github.io/nfl-futures-tracker/social-card.jpg">
 <meta property="og:image:type" content="image/jpeg">
@@ -18,13 +18,13 @@
 <meta property="og:image:alt" content="NFL Futures Tracker logo over a stadium with a rising green chart line and a football">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="NFL Futures Tracker">
-<meta name="twitter:description" content="How each week of NFL games moves Polymarket's implied probabilities for division winners, playoffs, Super Bowl and awards.">
+<meta name="twitter:description" content="How each week of NFL games moves Kalshi and Polymarket implied probabilities for division winners, playoffs, Super Bowl and awards.">
 <meta name="twitter:image" content="https://millxing.github.io/nfl-futures-tracker/social-card.jpg">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🏈</text></svg>">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=3">
+<link rel="stylesheet" href="style.css?v=4">
 </head>
 <body>
 <a class="skip-link" href="#main">Skip to markets</a>
@@ -32,7 +32,7 @@
 <header class="masthead">
   <div class="masthead-inner">
     <h1>NFL <span>Futures</span> Tracker</h1>
-    <p class="tagline">Polymarket probabilities · Snapshots before &amp; after every NFL week.</p>
+    <p class="tagline">Kalshi + Polymarket probabilities · Snapshots before &amp; after every NFL week.</p>
   </div>
   <nav class="tabs" role="tablist" aria-label="Market views">
     <button class="tab active" id="tab-movers" aria-controls="view-movers" tabindex="0" data-view="movers" role="tab" aria-selected="true">Weekly Movers</button>
@@ -41,6 +41,13 @@
 </header>
 
 <main id="main" tabindex="-1">
+  <fieldset class="source-toggle" aria-describedby="source-note">
+    <legend>Price source</legend>
+    <label><input type="radio" name="price-source" value="kalshi"><span>Kalshi</span></label>
+    <label><input type="radio" name="price-source" value="polymarket"><span>Polymarket</span></label>
+    <label><input type="radio" name="price-source" value="average" checked><span>Average</span></label>
+  </fieldset>
+  <p id="source-note" class="source-note" role="status"></p>
   <!-- ============ MOVERS VIEW ============ -->
   <section role="tabpanel" aria-labelledby="tab-movers" id="view-movers" class="view active">
     <div class="controls">
@@ -103,9 +110,9 @@
 <footer>
   <span id="gen-note"></span>
   <span class="sep">&middot;</span>
-  <span><a href="https://polymarket.com">Polymarket</a> price history · Probabilities in %; change in percentage points (pp). — means no observation.</span>
+  <span><a href="https://kalshi.com">Kalshi</a> + <a href="https://polymarket.com">Polymarket</a> price history · Probabilities in %; change in percentage points (pp). — means no observation.</span>
 </footer>
 
-<script src="app.js?v=3"></script>
+<script src="app.js?v=5"></script>
 </body>
 </html>
