@@ -38,6 +38,12 @@
   const fmt = (v) => (v == null ? "—" : v.toFixed(1));
 
   let DATA = null;
+  let source = "average";
+  const sourceLabel = () => ({kalshi: "Kalshi", polymarket: "Polymarket", average: "Average"})[source];
+  const pricesFor = (m) => source === "average"
+    ? m.prices.polymarket.map((p, i) => p == null || m.prices.kalshi[i] == null ? null : (p + m.prices.kalshi[i]) / 2)
+    : m.prices[source];
+  const available = (m) => pricesFor(m).some(p => p != null);
   const selectedMarkets = []; // market ids; visual slots stay stable until removal
 
   // "Pre Week 1", plus "(partial)" when the snapshot predates the week's last game
@@ -57,6 +63,17 @@
 
   function init() {
     $("gen-note").textContent = `Data generated ${DATA.generated} · ${DATA.markets.length} markets · ${DATA.snapshots.length} snapshots`;
+    document.querySelectorAll('input[name="price-source"]').forEach(input => {
+      input.addEventListener("change", () => {
+        source = input.value;
+        renderSourceNote();
+        $("ts-suggestions").hidden = true;
+        $("ts-market-search").setAttribute("aria-expanded", "false");
+        renderMovers(true);
+        renderTimeSeries();
+      });
+    });
+    renderSourceNote();
     buildSnapshotSelects();
     buildSeriesFilters();
     bindTabs();
@@ -64,6 +81,14 @@
     bindTimeSeriesControls();
     renderMovers();
     renderTimeSeries();
+  }
+
+  function renderSourceNote() {
+    $("source-note").textContent = source === "average"
+      ? "Equal-weight average of Kalshi midpoint and Polymarket price. Both observations required; — means one or both are missing."
+      : source === "kalshi"
+      ? "Kalshi bid/ask midpoint. Division markets are not included in these snapshots. — means no observation."
+      : "Polymarket historical price. — means no observation.";
   }
 
   /* ---------------- tabs ---------------- */
@@ -125,6 +150,8 @@
   }
 
   const moversSort = { key: "delta", asc: false };
+  let moversOrder = new Map();
+  let sortSourceLabel = "Average";
 
   function bindMoversControls() {
     ["from-select", "to-select", "series-filter"].forEach((id) =>
@@ -141,7 +168,7 @@
     });
   }
 
-  function renderMovers() {
+  function renderMovers(preserveOrder = false) {
     const fromIdx = +$("from-select").value;
     const toIdx = +$("to-select").value;
     const series = $("series-filter").value;
@@ -151,26 +178,33 @@
       .filter((m) => series === "all" || m.series === series)
       .filter((m) => !q || m.name.toLowerCase().includes(q) || m.question.toLowerCase().includes(q))
       .map((m) => {
-        const a = m.prices[fromIdx];
-        const b = m.prices[toIdx];
+        const a = pricesFor(m)[fromIdx];
+        const b = pricesFor(m)[toIdx];
         return { m, a, b, d: a != null && b != null ? b - a : null };
       });
 
     const keyFn = { delta: (r) => (r.d == null ? null : Math.abs(r.d)), from: (r) => r.a, to: (r) => r.b }[moversSort.key];
-    rows.sort((x, y) => {
-      const kx = keyFn(x);
-      const ky = keyFn(y);
-      if (kx == null && ky == null) return x.m.name.localeCompare(y.m.name);
-      if (kx == null) return 1;      // nulls always sink to the bottom
-      if (ky == null) return -1;
-      return moversSort.asc ? kx - ky : ky - kx;
-    });
+    if (preserveOrder === true) {
+      rows.sort((x, y) => moversOrder.get(x.m.id) - moversOrder.get(y.m.id));
+    } else {
+      rows.sort((x, y) => {
+        const kx = keyFn(x);
+        const ky = keyFn(y);
+        if (kx == null && ky == null) return x.m.name.localeCompare(y.m.name);
+        if (kx == null) return 1;      // nulls always sink to the bottom
+        if (ky == null) return -1;
+        return moversSort.asc ? kx - ky : ky - kx;
+      });
+      moversOrder = new Map(rows.map((r, i) => [r.m.id, i]));
+      sortSourceLabel = sourceLabel();
+    }
+    rows = rows.filter(r => available(r.m));
     document.querySelectorAll(".col-sort").forEach((btn) => {
       btn.classList.toggle("active", btn.dataset.sort === moversSort.key);
       btn.classList.toggle("asc", btn.dataset.sort === moversSort.key && moversSort.asc);
       const active = btn.dataset.sort === moversSort.key;
       btn.setAttribute("aria-pressed", active);
-      btn.setAttribute("aria-label", `Sort by ${btn.dataset.sort === "delta" ? "absolute change in percentage points" : btn.dataset.sort + " probability"}${active ? ", currently " + (moversSort.asc ? "ascending" : "descending") : ""}`);
+      btn.setAttribute("aria-label", `Sort by ${btn.dataset.sort === "delta" ? "absolute change in percentage points" : btn.dataset.sort + " probability"}${active ? ", ordered using " + sortSourceLabel + ", " + (moversSort.asc ? "ascending" : "descending") : ""}`);
     });
 
     const maxAbs = Math.max(0.5, ...rows.map((r) => Math.abs(r.d ?? 0)));
@@ -209,18 +243,18 @@
     const fromLabel = snapFull(DATA.snapshots[fromIdx]);
     const toLabel = snapFull(DATA.snapshots[toIdx]);
     const sortName = { delta: "absolute change", from: "From price", to: "To price" }[moversSort.key];
-    $("movers-summary").textContent = `${rows.length} market${rows.length === 1 ? "" : "s"} · ${fromLabel} → ${toLabel} · sorted by ${sortName} (${moversSort.asc ? "low to high" : "high to low"})${rows.length ? " · select a row to chart it" : ""}`;
+    $("movers-summary").textContent = `${sourceLabel()} · ${rows.length} market${rows.length === 1 ? "" : "s"} · ${fromLabel} → ${toLabel} · ordered by ${sortSourceLabel} ${sortName} (${moversSort.asc ? "low to high" : "high to low"})${rows.length ? " · select a row to chart it" : ""}`;
     if (!rows.length) {
       const note = document.createElement("div");
       note.className = "empty-note";
-      note.textContent = `No markets match “${$("search-input").value}” in this series. `;
+      note.textContent = `No ${sourceLabel()} observations match this series and search. `;
       const reset = document.createElement("button");
       reset.textContent = "Clear search";
       reset.onclick = () => { $("search-input").value = ""; renderMovers(); $("search-input").focus(); };
       note.append(reset); list.append(note);
     }
     if (rows.some(r => r.a == null || r.b == null)) {
-      const first = Math.min(...rows.map(r => r.m.prices.findIndex(p => p != null)).filter(i => i >= 0));
+      const first = Math.min(...rows.map(r => pricesFor(r.m).findIndex(p => p != null)).filter(i => i >= 0));
       $("movers-summary").textContent += ` · — = no observation; ${series === "all" ? "Available" : shortSeries(series)} history begins ${DATA.snapshots[first]?.label || "an unavailable date"}. Coverage varies by market.`;
     }
     if (fromIdx > toIdx) $("movers-summary").textContent += " · Reverse comparison: change is To minus From";
@@ -245,7 +279,7 @@
       active = -1;
       input.removeAttribute("aria-activedescendant");
       const q = input.value.trim().toLowerCase(), series = $("ts-series-select").value;
-      const pool = DATA.markets.filter(m => (series === "all" || m.series === series) && (!q || m.name.toLowerCase().includes(q) || m.question.toLowerCase().includes(q)));
+      const pool = DATA.markets.filter(available).filter(m => (series === "all" || m.series === series) && (!q || m.name.toLowerCase().includes(q) || m.question.toLowerCase().includes(q)));
       sugg.innerHTML = "";
       pool.forEach((m, i) => {
         const b = document.createElement("div");
@@ -346,7 +380,7 @@
     const body = selectedMarkets
       .map((id) => {
         const m = DATA.markets.find((x) => x.id === id);
-        const cells = indices.map(i => m.prices[i]).map((p) => `<td>${fmt(p)}</td>`).join("");
+        const cells = indices.map(i => pricesFor(m)[i]).map((p) => `<td>${fmt(p)}</td>`).join("");
         return `<tr><th scope="row">${esc(m.name)}</th>${cells}</tr>`;
       })
       .join("");
@@ -354,7 +388,7 @@
   }
 
   function chartStart() {
-    const starts = selectedMarkets.map(id => DATA.markets.find(m => m.id === id).prices.findIndex(p => p != null)).filter(i => i >= 0);
+    const starts = selectedMarkets.map(id => pricesFor(DATA.markets.find(m => m.id === id)).findIndex(p => p != null)).filter(i => i >= 0);
     return $("full-season").checked || !starts.length ? 0 : Math.min(...starts);
   }
 
@@ -370,13 +404,13 @@
     const n = DATA.snapshots.length;
     const start = chartStart();
     $("ts-tooltip").hidden = true;
-    $("chart-range").textContent = `${DATA.snapshots[start].label} – ${DATA.snapshots[n - 1].label} · Probabilities (%) · Hover or tap to inspect`;
+    $("chart-range").textContent = `${sourceLabel()} · ${DATA.snapshots[start].label} – ${DATA.snapshots[n - 1].label} · Probabilities (%) · Hover or tap to inspect`;
     svg.setAttribute("aria-label", `Market probabilities, ${DATA.snapshots[start].label} to ${DATA.snapshots[n-1].label}. Exact values in the data table below.`);
     const pad = { top: 18, right: 66, bottom: 34, left: 44 };
     const iw = W - pad.left - pad.right;
     const ih = H - pad.top - pad.bottom;
 
-    const allVals = markets.flatMap((m) => m.prices).filter((v) => v != null);
+    const allVals = markets.flatMap((m) => pricesFor(m)).filter((v) => v != null);
     let yMax = Math.min(100, Math.ceil((Math.max(5, ...allVals) * 1.12) / 5) * 5);
     const yMin = 0;
 
@@ -410,13 +444,13 @@
       const color = colorFor(m.id);
       let dPath = "";
       let started = false;
-      m.prices.forEach((p, i) => {
+      pricesFor(m).forEach((p, i) => {
         if (i < start || p == null) { started = false; return; }
         dPath += `${started ? "L" : "M"}${xPos(i)},${yPos(p)}`;
         started = true;
       });
       if (dPath) el("path", { d: dPath, stroke: color, "stroke-dasharray": dashFor(m.id), class: "series-line" });
-      m.prices.forEach((p, i) => {
+      pricesFor(m).forEach((p, i) => {
         if (i < start || p == null) return;
         el("circle", { cx: xPos(i), cy: yPos(p), r: 4, fill: color, class: "series-pt" });
       });
@@ -425,8 +459,8 @@
     // direct end labels, collision-shifted
     const labels = markets
       .map((m, mi) => {
-        const lastIdx = m.prices.map((p, i) => (p != null ? i : -1)).reduce((a, b) => Math.max(a, b), -1);
-        return lastIdx < 0 ? null : { mi, id: m.id, x: xPos(lastIdx), endpointY: yPos(m.prices[lastIdx]), y: yPos(m.prices[lastIdx]), v: m.prices[lastIdx], name: m.name };
+        const lastIdx = pricesFor(m).map((p, i) => (p != null ? i : -1)).reduce((a, b) => Math.max(a, b), -1);
+        return lastIdx < 0 ? null : { mi, id: m.id, x: xPos(lastIdx), endpointY: yPos(pricesFor(m)[lastIdx]), y: yPos(pricesFor(m)[lastIdx]), v: pricesFor(m)[lastIdx], name: m.name };
       })
       .filter(Boolean)
       .sort((a, b) => a.y - b.y);
@@ -463,7 +497,7 @@
       cross.setAttribute("x2", xPos(idx));
       cross.setAttribute("visibility", "visible");
       const rowsHtml = markets
-        .map((m, mi) => ({ m, mi, v: m.prices[idx] }))
+        .map((m, mi) => ({ m, mi, v: pricesFor(m)[idx] }))
         .filter((r) => r.v != null)
         .sort((a, b) => b.v - a.v)
         .map((r) => `<div class="tt-row">${lineKey(r.m.id)}

@@ -2,7 +2,7 @@
 """Convert snapshot xlsx files into docs/data/data.json for the site.
 
 Usage: python3 scripts/build_data.py
-Reads every snapshots/nfl_markets_snapshot_*.xlsx (Polymarket sheet only),
+Reads every snapshots/nfl_markets_snapshot_*.xlsx (Kalshi and Polymarket sheets),
 sorted chronologically by the datetime in the filename.
 Optional snapshots/labels.json maps snapshot id -> friendly label,
 e.g. {"2026-09-10_2000": "Pre Week 1"}.
@@ -51,6 +51,71 @@ EXCLUDED_SERIES = {
     "Pro Football: 2026-27 AFC #1 Seed",
     "Pro Football: 2026-27 NFC #1 Seed",
 }
+
+# Explicit season mapping prevents future contracts joining this season's prices.
+KALSHI_EVENTS = dict(zip(
+    ["KXSB-27", "KXNFLAFCCHAMP-27", "KXNFLNFCCHAMP-27", "KXNFLPLAYOFF-27",
+     "KXNFLMVP-27", "KXNFLOPOTY-27", "KXNFLDPOTY-27", "KXNFLOROTY-27",
+     "KXNFLDROTY-27", "KXNFLCOTY-27", "KXNFLCPOTY-27"],
+    SERIES_ORDER[:4] + SERIES_ORDER[12:],
+))
+NAME_ALIASES = {
+    "pat surtain": "Patrick Surtain II",
+    "kenneth walker": "Kenneth Walker III",
+    "jaxson smithnjigba": "Jaxon Smith-Njigba",
+}
+
+
+def name_key(name):
+    key = re.sub(r"[^a-z0-9 ]", "", name.lower())
+    return re.sub(r"[^a-z0-9]", "", NAME_ALIASES.get(key, key).lower())
+
+
+def read_sheet(path, sheet):
+    wb = load_workbook(path, read_only=True, data_only=True)
+    try:
+        if sheet not in wb.sheetnames:
+            return []
+        rows = wb[sheet].iter_rows(values_only=True)
+        next(rows)
+        next(rows)
+        header = next(rows)
+        return [dict(zip(header, row)) for row in rows if any(v is not None for v in row)]
+    finally:
+        wb.close()
+
+
+def merge_kalshi(path, poly, lookup, team_names):
+    result = {mid: {**row, "polymarket": row["price"], "kalshi": None}
+              for mid, row in poly.items()}
+    seen = set()
+    kalshi_rows = read_sheet(path, "Kalshi series")
+    if not kalshi_rows:
+        raise ValueError(f"Missing or empty Kalshi sheet: {path}")
+    for row in kalshi_rows:
+        series = KALSHI_EVENTS.get(row["event_ticker"])
+        if series is None:
+            raise ValueError(f"Unmapped Kalshi event: {row['event_ticker']}")
+        name = str(row["outcome"]).strip()
+        if series in TEAM_SERIES:
+            matches = [team for team in team_names if team.startswith(name + " ") or team == name
+                       or (name in ("Los Angeles C", "Los Angeles R", "New York G", "New York J")
+                           and team.startswith(name))]
+            if len(matches) != 1:
+                raise ValueError(f"Ambiguous or unknown Kalshi team: {name}")
+            name = matches[0]
+        match = lookup.get((series, name_key(name)))
+        mid = match[0] if match else "kalshi:" + row["ticker"]
+        if mid in seen:
+            raise ValueError(f"Duplicate Kalshi match: {mid}")
+        seen.add(mid)
+        if mid not in result:
+            result[mid] = {"series": series, "name": match[1]["name"] if match else name,
+                           "question": match[1]["question"] if match else row["market_title"],
+                           "polymarket": None, "kalshi": None}
+        price = row["midpoint"]
+        result[mid]["kalshi"] = round(float(price) * 100, 1) if row["data_status"] == "ok" and price is not None else None
+    return result
 
 FNAME_RE = re.compile(
     r"nfl_markets_snapshot_(\d{4}-\d{2}-\d{2})_(\d{4})_E[SD]T\.xlsx$"
@@ -119,9 +184,22 @@ def main():
         with open(labels_path) as f:
             labels = json.load(f)
 
+    # Match against all snapshots so a market keeps its identity through gaps.
+    poly_snapshots = [read_snapshot(path) for _, _, path in files]
+    lookup = {}
+    team_names = set()
+    for snap in poly_snapshots:
+        for mid, row in snap.items():
+            key = (row["series"], name_key(row["name"]))
+            if key in lookup and lookup[key][0] != mid:
+                raise ValueError(f"Ambiguous Polymarket match: {key}")
+            lookup[key] = (mid, row)
+            if row["series"] in TEAM_SERIES:
+                team_names.add(row["name"])
+
     snapshots = []
     per_snapshot = []
-    for dt, sid, path in files:
+    for file_idx, (dt, sid, path) in enumerate(files):
         # labels.json entry: "Pre Week 1" or {"label": "Mid Week 2", "partial": true}
         entry = labels.get(sid)
         if isinstance(entry, str):
@@ -138,7 +216,7 @@ def main():
                 "et": dt.strftime("%Y-%m-%d %H:%M"),
             }
         )
-        per_snapshot.append(read_snapshot(path))
+        per_snapshot.append(merge_kalshi(path, poly_snapshots[file_idx], lookup, team_names))
         print(f"  {sid}: {len(per_snapshot[-1])} markets")
 
     # Collect all markets across snapshots; metadata from latest appearance.
@@ -162,7 +240,8 @@ def main():
                 "series": m["series"],
                 "name": m["name"],
                 "question": m["question"],
-                "prices": [snap.get(mid, {}).get("price") for snap in per_snapshot],
+                "prices": {source: [snap.get(mid, {}).get(source) for snap in per_snapshot]
+                           for source in ("polymarket", "kalshi")},
             }
         )
     markets.sort(key=lambda m: (series_rank[m["series"]], m["name"]))
