@@ -136,6 +136,7 @@ select, input[type="search"] {
 /* ---------- movers list ---------- */
 
 .movers-summary { color: var(--ink-muted); font-size: 0.8rem; margin: 0 0 8px 2px; }
+#movers-summary { margin: 20px 0 0; line-height: 1.6; }
 
 .movers-header, .mover-row {
   display: grid;
