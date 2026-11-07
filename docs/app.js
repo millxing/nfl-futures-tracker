@@ -313,7 +313,19 @@
       input.setAttribute("aria-activedescendant", options[active].id);
       options[active].scrollIntoView({block: "nearest"});
     });
-    $("ts-series-select").addEventListener("change", () => { close(); input.focus(); });
+    $("ts-series-select").addEventListener("change", () => {
+      const series = $("ts-series-select").value;
+      const markets = DATA.markets.filter(m => m.series === series);
+      if (markets.length && !markets.some(available) && markets.some(m => m.prices.polymarket.some(p => p != null))) {
+        const polymarket = document.querySelector('input[name="price-source"][value="polymarket"]');
+        polymarket.checked = true;
+        polymarket.dispatchEvent(new Event("change"));
+        $("source-note").textContent = `${shortSeries(series)} has no Kalshi observations. Switched to Polymarket to show available markets.`;
+      }
+      input.value = "";
+      input.focus();
+      update();
+    });
     $("clear-markets").addEventListener("click", () => { selectedMarkets.length = 0; marketSlots.clear(); close(); renderTimeSeries(); input.focus(); });
     $("full-season").addEventListener("change", () => { if (selectedMarkets.length) { drawChart(); drawTable(); } });
   }
