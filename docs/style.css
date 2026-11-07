@@ -393,11 +393,55 @@ summary { cursor: pointer; color: var(--ink-2); padding: 14px 0; min-height: 44p
 }
 
 /* One source selection applies to both views. Native radios support arrow keys. */
-.source-toggle { display: flex; flex-wrap: wrap; gap: 4px; border: 0; padding: 0; margin: 0; }
+.source-toggle { display: flex; flex-wrap: wrap; gap: 4px; border: 0; padding: 0; margin: 0 0 24px; }
 .source-toggle legend { color: var(--ink-muted); font-size: .75rem; text-transform: uppercase; letter-spacing: .14em; margin-bottom: 6px; }
 .source-toggle label { position: relative; cursor: pointer; }
 .source-toggle input { position: absolute; opacity: 0; width: 1px; height: 1px; }
 .source-toggle span { display: block; min-height: 44px; padding: 10px 16px; background: var(--surface); border: 1px solid var(--baseline); border-radius: 6px; color: var(--ink-2); }
 .source-toggle input:checked + span { background: var(--accent); border-color: var(--accent); color: var(--page); }
 .source-toggle input:focus-visible + span { outline: 2px solid var(--accent); outline-offset: 3px; }
-.source-note { color: var(--ink-muted); font-size: .8rem; margin: 10px 0 22px; }
+.source-note { color: var(--ink-muted); font-size: .8rem; margin: 0 0 12px; line-height: 1.6; }
+
+/* Teams and saved markets share the existing broadcast-desk palette. */
+h2 { font: 600 2rem var(--display); margin: 0 0 16px; }
+h3 { font: 600 1.35rem var(--display); margin: 28px 0 12px; }
+.team-heading { display: flex; align-items: center; gap: 16px; margin-bottom: 16px; }
+.team-heading h2 { margin: 0; }
+.favorite-button { flex: none; width: 44px; min-height: 44px; border: 0; background: transparent; color: var(--ink-muted); font-size: 1.5rem; cursor: pointer; }
+.favorite-button:hover, .favorite-button[aria-pressed="true"], .chip .favorite-button[aria-pressed="true"] { color: var(--accent); }
+.team-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 1px; border: 1px solid var(--grid); background: var(--grid); margin-bottom: 24px; }
+.team-tile { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 10px 12px; background: var(--surface); }
+.team-tile a { color: var(--ink); text-decoration: none; padding: 8px 0; }
+.team-tile a:hover { color: var(--accent); text-decoration: underline; }
+.market-card { display: grid; grid-template-columns: minmax(0, 1fr) 100px auto 44px; gap: 16px; align-items: center; padding: 16px 12px; border-bottom: 1px solid var(--grid); }
+.market-card:nth-child(odd) { background: rgba(255,255,255,.018); }
+.market-name { display: flex; flex-direction: column; gap: 4px; overflow-wrap: anywhere; }
+.market-name span, .market-name a { font-size: .78rem; color: var(--ink-2); }
+.market-price { display: flex; flex-direction: column; text-align: right; font-family: var(--mono); gap: 4px; }
+.market-price strong { font-size: 1.2rem; font-weight: 500; }
+.market-price span { font-size: .78rem; }
+.action-button { color: var(--ink); background: var(--surface); border: 1px solid var(--baseline); padding: 8px 12px; border-radius: 6px; min-height: 44px; cursor: pointer; }
+.action-button:hover { border-color: var(--accent); }
+.market-list .empty-note { padding: 12px 0; margin: 0; }
+.mover-entry { display: flex; align-items: center; border-bottom: 1px solid var(--grid); }
+.mover-entry .mover-row { flex: 1; min-width: 0; border-bottom: 0; background: none; }
+.mover-entry:nth-child(odd) { background: rgba(255,255,255,.018); }
+.mover-entry:hover { background: var(--surface-2); }
+.movers-header { margin-right: 44px; }
+#favorite-status:not(:empty) { margin-top: 20px; }
+@media (max-width: 720px) {
+  .tabs { padding: 0 12px; gap: 0; }
+  .tab { font-size: 1rem; padding: 10px 9px; letter-spacing: .02em; }
+  .market-card { grid-template-columns: minmax(0, 1fr) 80px 44px; gap: 10px; padding: 14px 0; }
+  .market-card .market-name { grid-column: 1; grid-row: 1; }
+  .market-card .market-price { grid-column: 2; grid-row: 1; }
+  .market-card .favorite-button { grid-column: 3; grid-row: 1; }
+  .market-card .action-button { grid-column: 1 / -1; grid-row: 2; }
+  .movers-header, .mover-row { grid-template-columns: minmax(0, 1fr) 40px 40px 51px; gap: 5px; }
+  .mover-row .price, .mover-row .delta { font-size: .72rem; }
+  .chip button { margin-left: 0; }
+  .chip .favorite-button { margin-left: auto; }
+}
+
+
+footer .source-note, footer .movers-summary { margin: 0 0 8px; }

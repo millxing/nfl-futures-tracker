@@ -40,10 +40,22 @@
   let DATA = null;
   let source = "average";
   const sourceLabel = () => ({kalshi: "Kalshi", polymarket: "Polymarket", average: "Average"})[source];
-  const pricesFor = (m) => source === "average"
+  const pricesFor = (m, selectedSource = source) => selectedSource === "average"
     ? m.prices.polymarket.map((p, i) => p == null || m.prices.kalshi[i] == null ? null : (p + m.prices.kalshi[i]) / 2)
-    : m.prices[source];
+    : m.prices[selectedSource];
   const available = (m) => pricesFor(m).some(p => p != null);
+  let ROSTERS = null;
+  let teams = [];
+  const marketTeams = new Map();
+  const FAVORITES_KEY = "nfl-futures-favorites-v1";
+  let favorites = new Set();
+  let storageAvailable = true;
+  const PLAYER_ALIASES = {
+    "Jaxson Smith-Njigba": "Jaxon Smith-Njigba",
+    "Kenneth Walker": "Kenneth Walker III",
+    "Patrick Surtain II": "Pat Surtain II",
+  };
+  const normalizeName = name => (PLAYER_ALIASES[name] || name).normalize("NFKD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]/g, "");
   const selectedMarkets = []; // market ids; visual slots stay stable until removal
 
   // "Pre Week 1", plus "(partial)" when the snapshot predates the week's last game
@@ -51,14 +63,18 @@
   // "Pre Week 1 · Sep 10, 8:00 PM ET (partial)" — friendly label with exact time
   const snapFull = (s) => (s.label === s.time || s.time.startsWith(s.label + ",") ? s.time : `${s.label} · ${s.time}`) + (s.partial ? " (partial)" : "");
 
-  fetch("data/data.json?t=" + Date.now())
-    .then((r) => r.json())
-    .then((d) => {
-      DATA = d;
+  const loadJSON = url => fetch(url + "?t=" + Date.now()).then(r => {
+    if (!r.ok) throw new Error(`Unable to load ${url}`);
+    return r.json();
+  });
+  Promise.all([loadJSON("data/data.json"), loadJSON("data/rosters.json").catch(() => null)])
+    .then(([data, rosters]) => {
+      DATA = data;
+      ROSTERS = rosters;
       init();
     })
-    .catch((e) => {
-      $("movers-list").innerHTML = `<div class="empty-note">Failed to load data: ${e}</div>`;
+    .catch(() => {
+      $("movers-list").textContent = "Failed to load market data. Please reload to try again.";
     });
 
   function init() {
@@ -71,16 +87,24 @@
         $("ts-market-search").setAttribute("aria-expanded", "false");
         renderMovers(true);
         renderTimeSeries();
+        renderTeams();
+        renderFavorites();
       });
     });
     renderSourceNote();
     buildSnapshotSelects();
     buildSeriesFilters();
+    initTeams();
+    loadFavorites();
     bindTabs();
     bindMoversControls();
     bindTimeSeriesControls();
     renderMovers();
     renderTimeSeries();
+    renderTeams();
+    renderFavorites();
+    applyRoute();
+    window.addEventListener("hashchange", applyRoute);
   }
 
   function renderSourceNote() {
@@ -99,14 +123,20 @@
       tab.addEventListener("keydown", (e) => {
         if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(e.key)) return;
         e.preventDefault();
-        const view = e.key === "Home" ? "movers" : e.key === "End" ? "series" : tab.dataset.view === "movers" ? "series" : "movers";
+        const views = ["movers", "series", "teams", "favorites"];
+        const index = views.indexOf(tab.dataset.view);
+        const view = views[e.key === "Home" ? 0 : e.key === "End" ? views.length - 1 : (index + (e.key === "ArrowRight" ? 1 : -1) + views.length) % views.length];
         switchView(view);
         $("tab-" + view).focus();
       });
     });
   }
 
-  function switchView(view) {
+  function switchView(view, updateURL = true) {
+    if (updateURL) {
+      const route = view === "teams" && $("team-select").value ? `teams/${$("team-select").value}` : view;
+      if (location.hash !== "#" + route) history.pushState(null, "", "#" + route);
+    }
     document.querySelectorAll(".tab").forEach((t) => {
       const on = t.dataset.view === view;
       t.classList.toggle("active", on);
@@ -115,7 +145,12 @@
     });
     document.querySelectorAll(".view").forEach((v) => v.classList.remove("active"));
     $(`view-${view}`).classList.add("active");
+    document.querySelectorAll("[data-note-view]").forEach(note => {
+      note.hidden = note.dataset.noteView !== view;
+    });
     if (view === "series") renderTimeSeries();
+    if (view === "teams") renderTeams();
+    if (view === "favorites") renderFavorites();
   }
 
   /* ---------------- movers view ---------------- */
@@ -236,7 +271,10 @@
         addMarket(r.m.id);
         $("tab-series").focus();
       });
-      frag.append(btn);
+      const entry = document.createElement("div");
+      entry.className = "mover-entry";
+      entry.append(btn, favoriteButton("market:" + r.m.id, `${r.m.name} · ${shortSeries(r.m.series)}`));
+      frag.append(entry);
     });
     list.append(frag);
 
@@ -339,6 +377,13 @@
       $("selection-status").textContent = `${DATA.markets.find(m => m.id === id).name} not added · 8/8 selected; remove a market first`;
       return false;
     }
+    const market = DATA.markets.find(m => m.id === id);
+    if (!available(market) && market.prices.polymarket.some(p => p != null)) {
+      const polymarket = document.querySelector('input[name="price-source"][value="polymarket"]');
+      polymarket.checked = true;
+      polymarket.dispatchEvent(new Event("change"));
+      $("source-note").textContent = `${shortSeries(market.series)} has no Kalshi observations. Switched to Polymarket to show available history.`;
+    }
     const used = new Set(marketSlots.values());
     marketSlots.set(id, SERIES_COLORS.findIndex((_, slot) => !used.has(slot)));
     selectedMarkets.push(id);
@@ -370,7 +415,7 @@
       x.textContent = "✕";
       x.setAttribute("aria-label", `Remove ${m.name}`);
       x.addEventListener("click", () => removeMarket(id));
-      chip.append(x);
+      chip.append(favoriteButton("market:" + id, `${m.name} · ${shortSeries(m.series)}`), x);
       chips.append(chip);
     });
 
@@ -532,6 +577,207 @@
   window.addEventListener("resize", () => {
     if (selectedMarkets.length && $("view-series").classList.contains("active")) drawChart();
   });
+
+  /* ---------------- teams and favorites ---------------- */
+
+  function initTeams() {
+    const teamSeries = new Set(DATA.teamSeries);
+    const canonical = name => name;
+    const names = [...new Set(DATA.markets.filter(m => teamSeries.has(m.series)).map(m => canonical(m.name)))].sort();
+    teams = names.map(name => {
+      const roster = ROSTERS?.teams.find(t => t.name === name);
+      return { id: name.toLowerCase().replace(/ /g, "-"), name, players: roster?.players || [], coaches: roster?.coaches || [] };
+    });
+    DATA.markets.forEach(m => {
+      const team = teamSeries.has(m.series)
+        ? teams.find(t => t.name === canonical(m.name))
+        : teams.find(t => (m.series.includes("Coach of the Year") ? t.coaches : t.players).some(p => normalizeName(p) === normalizeName(m.name)));
+      if (team) marketTeams.set(m.id, team.id);
+    });
+    teams.forEach(t => $("team-select").add(new Option(t.name, t.id)));
+    $("team-select").addEventListener("change", () => switchView("teams"));
+    $("roster-note").textContent = ROSTERS
+      ? `Player and coach affiliations: ESPN NFL rosters and coaches, updated ${ROSTERS.updated}. Award history follows the player, including time with previous teams. Only tracked candidates matched to the current roster are shown; unmatched candidates remain available in Weekly Movers.`
+      : "Player affiliations are unavailable. Team futures are still available; reload to try loading award candidates.";
+  }
+
+  function applyRoute() {
+    const [view, id] = location.hash.slice(1).split("/");
+    if (view === "teams") $("team-select").value = teams.some(t => t.id === id) ? id : "";
+    switchView(["movers", "series", "teams", "favorites"].includes(view) ? view : "movers", false);
+  }
+
+  function loadFavorites() {
+    try {
+      const saved = JSON.parse(localStorage.getItem(FAVORITES_KEY) || "[]");
+      if (Array.isArray(saved)) favorites = new Set(saved.filter(k => typeof k === "string" && /^(team|market):/.test(k)));
+    } catch {
+      storageAvailable = false;
+      $("favorite-status").textContent = "Saved favorites could not be loaded. You can still use favorites during this visit.";
+    }
+  }
+
+  function favoriteButton(key, label) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "favorite-button";
+    button.dataset.favorite = key;
+    button.dataset.label = label;
+    updateFavoriteButton(button);
+    button.addEventListener("click", () => {
+      if (favorites.has(key)) favorites.delete(key); else favorites.add(key);
+      try {
+        localStorage.setItem(FAVORITES_KEY, JSON.stringify([...favorites]));
+        storageAvailable = true;
+      } catch { storageAvailable = false; }
+      document.querySelectorAll("[data-favorite]").forEach(updateFavoriteButton);
+      $("favorite-status").textContent = `${label} ${favorites.has(key) ? "added to" : "removed from"} favorites.${storageAvailable ? "" : " Browser storage is unavailable; changes last only for this visit."}`;
+      if ($("view-favorites").classList.contains("active")) {
+        const buttons = [...$("favorites-content").querySelectorAll("[data-favorite]")];
+        const index = buttons.indexOf(button);
+        renderFavorites();
+        const remaining = $("favorites-content").querySelectorAll("[data-favorite]");
+        (remaining[Math.min(index, remaining.length - 1)] || $("tab-favorites")).focus();
+      }
+    });
+    return button;
+  }
+
+  function updateFavoriteButton(button) {
+    const saved = favorites.has(button.dataset.favorite);
+    button.textContent = saved ? "★" : "☆";
+    button.setAttribute("aria-pressed", String(saved));
+    button.setAttribute("aria-label", `${saved ? "Remove" : "Add"} ${button.dataset.label} ${saved ? "from" : "to"} favorites`);
+    button.title = button.getAttribute("aria-label");
+  }
+
+  function teamLink(team) {
+    const link = document.createElement("a");
+    link.href = "#teams/" + team.id;
+    link.textContent = team.name;
+    return link;
+  }
+
+  function teamDirectory(list) {
+    const grid = document.createElement("div");
+    grid.className = "team-grid";
+    list.forEach(team => {
+      const row = document.createElement("div");
+      row.className = "team-tile";
+      row.append(teamLink(team), favoriteButton("team:" + team.id, team.name));
+      grid.append(row);
+    });
+    return grid;
+  }
+
+  function sectionTitle(container, title) {
+    const h = document.createElement("h3");
+    h.textContent = title;
+    container.append(h);
+  }
+
+  function marketList(markets, emptyMessage, showTeam = true) {
+    const list = document.createElement("div");
+    list.className = "market-list";
+    if (!markets.length) {
+      const note = document.createElement("p");
+      note.className = "empty-note";
+      note.textContent = emptyMessage;
+      list.append(note);
+      return list;
+    }
+    const last = DATA.snapshots.length - 1;
+    [...markets].sort((a, b) => (pricesFor(b, "average")[last] ?? -1) - (pricesFor(a, "average")[last] ?? -1) || a.name.localeCompare(b.name)).forEach(m => {
+      const row = document.createElement("div");
+      row.className = "market-card";
+      const value = pricesFor(m)[last];
+      const previous = pricesFor(m)[last - 1];
+      const delta = value != null && previous != null ? value - previous : null;
+      const name = document.createElement("div");
+      name.className = "market-name";
+      name.innerHTML = `<strong>${esc(m.name)}</strong><span>${esc(shortSeries(m.series))}</span>`;
+      const team = teams.find(t => t.id === marketTeams.get(m.id));
+      if (team && showTeam) name.append(teamLink(team));
+      const price = document.createElement("div");
+      price.className = "market-price";
+      price.innerHTML = `<strong>${fmt(value)}${value == null ? "" : "%"}</strong><span class="delta ${delta == null || Math.abs(delta) < .05 ? "zero" : delta > 0 ? "pos" : "neg"}">${delta == null ? "—" : (delta > 0 ? "+" : "") + delta.toFixed(1)} pp</span>`;
+      const chart = document.createElement("button");
+      chart.className = "action-button";
+      chart.textContent = "View history";
+      chart.setAttribute("aria-label", `View ${m.name} ${shortSeries(m.series)} history`);
+      chart.addEventListener("click", () => {
+        switchView("series");
+        addMarket(m.id);
+        $("tab-series").focus();
+      });
+      row.append(name, price, chart, favoriteButton("market:" + m.id, `${m.name} · ${shortSeries(m.series)}`));
+      list.append(row);
+    });
+    return list;
+  }
+
+  function snapshotNote(container) {
+    const note = document.createElement("p");
+    note.className = "movers-summary";
+    const n = DATA.snapshots.length;
+    note.textContent = `${sourceLabel()} · Latest snapshot: ${snapFull(DATA.snapshots[n - 1])}. ${n > 1 ? `Changes since ${snapFull(DATA.snapshots[n - 2])}, in percentage points.` : "No previous snapshot for comparison."} — means no observation.`;
+    container.append(note);
+  }
+
+  function renderTeams() {
+    const content = $("team-content");
+    content.replaceChildren();
+    const team = teams.find(t => t.id === $("team-select").value);
+    const heading = document.createElement("h2");
+    heading.textContent = team ? team.name : "Explore teams";
+    if (!team) {
+      content.append(heading, teamDirectory(teams));
+      return;
+    }
+    const header = document.createElement("div");
+    header.className = "team-heading";
+    header.append(heading, favoriteButton("team:" + team.id, team.name));
+    content.append(header);
+    const markets = DATA.markets.filter(m => marketTeams.get(m.id) === team.id);
+    sectionTitle(content, "Team futures");
+    content.append(marketList(markets.filter(m => DATA.teamSeries.includes(m.series)), "No team futures are tracked yet.", false));
+    for (const [title, match] of [["MVP candidates", "MVP"], ["Offensive Player of the Year", "Offensive Player of the Year"], ["Defensive Player of the Year", "Defensive Player of the Year"], ["Offensive Rookie of the Year", "Offensive Rookie of the Year"], ["Defensive Rookie of the Year", "Defensive Rookie of the Year"], ["Comeback Player of the Year", "Comeback Player of the Year"], ["Coach of the Year", "Coach of the Year"]]) {
+      sectionTitle(content, title);
+      content.append(marketList(markets.filter(m => m.series.includes(match)), ROSTERS ? "No tracked candidates matched to this team’s current roster." : "Player rosters are unavailable. Reload to try again.", false));
+    }
+    snapshotNote(content);
+  }
+
+  function renderFavorites() {
+    const content = $("favorites-content");
+    content.replaceChildren();
+    const savedTeams = teams.filter(t => favorites.has("team:" + t.id));
+    const explicit = DATA.markets.filter(m => favorites.has("market:" + m.id));
+    const teamMarkets = DATA.markets.filter(m => savedTeams.some(t => t.id === marketTeams.get(m.id)));
+    const markets = [...new Map([...explicit, ...teamMarkets].map(m => [m.id, m])).values()];
+    if (!savedTeams.length && !explicit.length) {
+      const note = document.createElement("p");
+      note.className = "empty-note";
+      note.textContent = "No favorites yet. Star a team in Teams or a market in Weekly Movers to get started. ";
+      const browse = document.createElement("a");
+      browse.href = "#teams";
+      browse.textContent = "Explore teams";
+      note.append(browse);
+      content.append(note);
+      return;
+    }
+    if (savedTeams.length) {
+      sectionTitle(content, "Saved teams");
+      content.append(teamDirectory(savedTeams));
+    }
+    sectionTitle(content, "Markets you follow");
+    const note = document.createElement("p");
+    note.className = "movers-summary";
+    note.textContent = "Includes all tracked futures and award candidates for saved teams, plus individually starred markets. Remove a team star to stop following all of its markets.";
+    content.append(marketList(markets, "No markets available."));
+    content.append(note);
+    snapshotNote(content);
+  }
 
   /* ---------------- utils ---------------- */
 

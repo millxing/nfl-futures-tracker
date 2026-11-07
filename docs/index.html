@@ -24,7 +24,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=4">
+<link rel="stylesheet" href="style.css?v=6">
 </head>
 <body>
 <a class="skip-link" href="#main">Skip to markets</a>
@@ -37,6 +37,8 @@
   <nav class="tabs" role="tablist" aria-label="Market views">
     <button class="tab active" id="tab-movers" aria-controls="view-movers" tabindex="0" data-view="movers" role="tab" aria-selected="true">Weekly Movers</button>
     <button class="tab" id="tab-series" aria-controls="view-series" tabindex="-1" data-view="series" role="tab" aria-selected="false">Time Series</button>
+    <button class="tab" id="tab-teams" aria-controls="view-teams" tabindex="-1" data-view="teams" role="tab" aria-selected="false">Teams</button>
+    <button class="tab" id="tab-favorites" aria-controls="view-favorites" tabindex="-1" data-view="favorites" role="tab" aria-selected="false">Favorites</button>
   </nav>
 </header>
 
@@ -47,7 +49,6 @@
     <label><input type="radio" name="price-source" value="polymarket"><span>Polymarket</span></label>
     <label><input type="radio" name="price-source" value="average" checked><span>Average</span></label>
   </fieldset>
-  <p id="source-note" class="source-note" role="status"></p>
   <!-- ============ MOVERS VIEW ============ -->
   <section role="tabpanel" aria-labelledby="tab-movers" id="view-movers" class="view active">
     <div class="controls">
@@ -79,7 +80,6 @@
       <button type="button" class="col-sort col-delta" data-sort="delta">Δ pp</button>
     </div>
     <div id="movers-list" class="movers-list"></div>
-    <div class="movers-summary" id="movers-summary" role="status"></div>
   </section>
 
   <!-- ============ TIME SERIES VIEW ============ -->
@@ -96,7 +96,6 @@
       </div>
     </div>
     <div class="chart-tools"><span id="selection-status" role="status"></span><button id="clear-markets" type="button">Clear all</button><label><input id="full-season" type="checkbox"> Full season</label></div>
-    <p id="chart-range" class="movers-summary"></p>
     <div id="ts-chips" class="chips"></div>
     <div id="ts-chart-wrap" class="chart-wrap">
       <svg id="ts-chart" role="img" aria-label="Time series of market probabilities"></svg>
@@ -105,14 +104,28 @@
     <div id="ts-empty" class="empty-note">Pick a market above &mdash; or click any row in Weekly Movers &mdash; to chart its probability across snapshots.</div>
     <details id="data-details"><summary>Data table · latest first</summary><div id="ts-table-wrap" class="ts-table-wrap" tabindex="0" role="region" aria-label="Market probabilities by snapshot"></div></details>
   </section>
+  <section role="tabpanel" aria-labelledby="tab-teams" id="view-teams" class="view">
+    <div class="controls"><div class="control grow"><label for="team-select">Choose a team</label><select id="team-select"><option value="">All teams</option></select></div></div>
+    <div id="team-content"></div>
+  </section>
+  <section role="tabpanel" aria-labelledby="tab-favorites" id="view-favorites" class="view">
+    <h2>Your favorites</h2>
+    <div id="favorites-content"></div>
+  </section>
+  <p id="favorite-status" class="movers-summary" role="status" aria-live="polite"></p>
 </main>
 
 <footer>
+  <p id="source-note" class="source-note" role="status"></p>
+  <div class="movers-summary" data-note-view="movers" id="movers-summary" role="status"></div>
+  <p id="chart-range" class="movers-summary" data-note-view="series" hidden></p>
+  <p id="roster-note" class="movers-summary" data-note-view="teams" hidden></p>
+  <p class="movers-summary" data-note-view="favorites" hidden>Save teams and individual markets with the star buttons. Favorites stay in this browser.</p>
   <span id="gen-note"></span>
   <span class="sep">&middot;</span>
   <span><a href="https://kalshi.com">Kalshi</a> + <a href="https://polymarket.com">Polymarket</a> price history · Probabilities in %; change in percentage points (pp). — means no observation.</span>
 </footer>
 
-<script src="app.js?v=6"></script>
+<script src="app.js?v=7"></script>
 </body>
 </html>

@@ -74,3 +74,18 @@ The saved Kalshi sheets do not include division markets. Matching uses explicit
 fail the build instead of silently joining another season.
 
 Validation: `python3 -m unittest discover -s tests -v`.
+
+## Teams and favorites
+
+The Teams tab groups team futures and tracked player/coach awards by current NFL
+roster. Team links can be bookmarked (for example, `#teams/buffalo-bills`). Star
+a team to follow all its matched markets, or star individual markets from
+Weekly Movers, Time Series, or a team page. Favorites are saved in this browser
+under `nfl-futures-favorites-v1`, separately from NBA favorites.
+
+Refresh the cached affiliations with `python3 scripts/update_rosters.py`. This
+fetches all 32 ESPN NFL rosters and coaches and preserves the previous cache if
+a refresh fails. Shared-name candidates are disambiguated using ESPN athlete
+IDs; name variations are mapped in `docs/app.js`. Candidates absent from the
+current roster cache are still available as individual markets. Historical
+award prices follow the person, including time with previous teams.
