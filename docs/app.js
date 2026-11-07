@@ -26,19 +26,24 @@
   const shortSeries = (s) => SHORT_SERIES[s] || s.replace(/^Pro Football:\s*/, "");
 
   // Categorical slots (validated dark-mode order) for time-series lines.
-  const SERIES_COLORS = ["#3987e5", "#d95926", "#199e70", "#c98500", "#d55181", "#008300", "#9085e9", "#e66767"];
+  const SERIES_COLORS = ["#74aef0", "#f0a35b", "#54c7a5", "#e8cf72", "#ed89c4", "#b1c98a", "#ad9cf0", "#ef8f8f"];
   const MAX_LINES = 8;
+  const LINE_DASHES = ["none", "8 3", "3 3", "12 3 3 3", "2 4", "10 4", "6 3 2 3", "14 4"];
+  const marketSlots = new Map();
+  const colorFor = id => SERIES_COLORS[marketSlots.get(id)];
+  const dashFor = id => LINE_DASHES[marketSlots.get(id)];
+  const lineKey = id => `<svg class="line-key" viewBox="0 0 32 12" aria-hidden="true"><path d="M1 6H31" fill="none" stroke="${colorFor(id)}" stroke-width="3" stroke-dasharray="${dashFor(id)}"/></svg>`;
 
   const $ = (id) => document.getElementById(id);
   const fmt = (v) => (v == null ? "—" : v.toFixed(1));
 
   let DATA = null;
-  const selectedMarkets = []; // market ids, insertion order = color slot
+  const selectedMarkets = []; // market ids; visual slots stay stable until removal
 
   // "Pre Week 1", plus "(partial)" when the snapshot predates the week's last game
   const snapLabel = (s) => s.label + (s.partial ? " (partial)" : "");
   // "Pre Week 1 · Sep 10, 8:00 PM ET (partial)" — friendly label with exact time
-  const snapFull = (s) => (s.label === s.time ? s.time : `${s.label} · ${s.time}`) + (s.partial ? " (partial)" : "");
+  const snapFull = (s) => (s.label === s.time || s.time.startsWith(s.label + ",") ? s.time : `${s.label} · ${s.time}`) + (s.partial ? " (partial)" : "");
 
   fetch("data/data.json?t=" + Date.now())
     .then((r) => r.json())
@@ -66,6 +71,13 @@
   function bindTabs() {
     document.querySelectorAll(".tab").forEach((tab) => {
       tab.addEventListener("click", () => switchView(tab.dataset.view));
+      tab.addEventListener("keydown", (e) => {
+        if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(e.key)) return;
+        e.preventDefault();
+        const view = e.key === "Home" ? "movers" : e.key === "End" ? "series" : tab.dataset.view === "movers" ? "series" : "movers";
+        switchView(view);
+        $("tab-" + view).focus();
+      });
     });
   }
 
@@ -74,6 +86,7 @@
       const on = t.dataset.view === view;
       t.classList.toggle("active", on);
       t.setAttribute("aria-selected", on);
+      t.tabIndex = on ? 0 : -1;
     });
     document.querySelectorAll(".view").forEach((v) => v.classList.remove("active"));
     $(`view-${view}`).classList.add("active");
@@ -147,6 +160,7 @@
     rows.sort((x, y) => {
       const kx = keyFn(x);
       const ky = keyFn(y);
+      if (kx == null && ky == null) return x.m.name.localeCompare(y.m.name);
       if (kx == null) return 1;      // nulls always sink to the bottom
       if (ky == null) return -1;
       return moversSort.asc ? kx - ky : ky - kx;
@@ -154,6 +168,9 @@
     document.querySelectorAll(".col-sort").forEach((btn) => {
       btn.classList.toggle("active", btn.dataset.sort === moversSort.key);
       btn.classList.toggle("asc", btn.dataset.sort === moversSort.key && moversSort.asc);
+      const active = btn.dataset.sort === moversSort.key;
+      btn.setAttribute("aria-pressed", active);
+      btn.setAttribute("aria-label", `Sort by ${btn.dataset.sort === "delta" ? "absolute change in percentage points" : btn.dataset.sort + " probability"}${active ? ", currently " + (moversSort.asc ? "ascending" : "descending") : ""}`);
     });
 
     const maxAbs = Math.max(0.5, ...rows.map((r) => Math.abs(r.d ?? 0)));
@@ -181,8 +198,9 @@
         }</span>
         <span class="delta ${cls}">${d == null ? "—" : (d > 0 ? "+" : "") + d.toFixed(1)}</span>`;
       btn.addEventListener("click", () => {
-        addMarket(r.m.id, true);
         switchView("series");
+        addMarket(r.m.id);
+        $("tab-series").focus();
       });
       frag.append(btn);
     });
@@ -191,7 +209,21 @@
     const fromLabel = snapFull(DATA.snapshots[fromIdx]);
     const toLabel = snapFull(DATA.snapshots[toIdx]);
     const sortName = { delta: "absolute change", from: "From price", to: "To price" }[moversSort.key];
-    $("movers-summary").textContent = `${rows.length} markets · ${fromLabel} → ${toLabel} · sorted by ${sortName} (${moversSort.asc ? "low to high" : "high to low"}) · click a row to chart it`;
+    $("movers-summary").textContent = `${rows.length} market${rows.length === 1 ? "" : "s"} · ${fromLabel} → ${toLabel} · sorted by ${sortName} (${moversSort.asc ? "low to high" : "high to low"})${rows.length ? " · select a row to chart it" : ""}`;
+    if (!rows.length) {
+      const note = document.createElement("div");
+      note.className = "empty-note";
+      note.textContent = `No markets match “${$("search-input").value}” in this series. `;
+      const reset = document.createElement("button");
+      reset.textContent = "Clear search";
+      reset.onclick = () => { $("search-input").value = ""; renderMovers(); $("search-input").focus(); };
+      note.append(reset); list.append(note);
+    }
+    if (rows.some(r => r.a == null || r.b == null)) {
+      const first = Math.min(...rows.map(r => r.m.prices.findIndex(p => p != null)).filter(i => i >= 0));
+      $("movers-summary").textContent += ` · — = no observation; ${series === "all" ? "Available" : shortSeries(series)} history begins ${DATA.snapshots[first]?.label || "an unavailable date"}. Coverage varies by market.`;
+    }
+    if (fromIdx > toIdx) $("movers-summary").textContent += " · Reverse comparison: change is To minus From";
     if (fromIdx === toIdx) {
       $("movers-summary").textContent += " · from and to are the same snapshot";
     }
@@ -200,66 +232,92 @@
   /* ---------------- time-series view ---------------- */
 
   function bindTimeSeriesControls() {
-    const input = $("ts-market-search");
-    const sugg = $("ts-suggestions");
-
+    const input = $("ts-market-search"), sugg = $("ts-suggestions");
+    const close = () => { sugg.hidden = true; input.setAttribute("aria-expanded", "false"); input.removeAttribute("aria-activedescendant"); };
+    input.setAttribute("role", "combobox");
+    input.setAttribute("aria-controls", "ts-suggestions");
+    input.setAttribute("aria-autocomplete", "list");
+    input.setAttribute("aria-expanded", "false");
+    sugg.setAttribute("role", "listbox");
+    sugg.setAttribute("aria-label", "Matching markets");
+    let active = -1;
     const update = () => {
-      const q = input.value.trim().toLowerCase();
-      const series = $("ts-series-select").value;
-      let pool = DATA.markets.filter((m) => series === "all" || m.series === series);
-      if (q) pool = pool.filter((m) => m.name.toLowerCase().includes(q) || m.question.toLowerCase().includes(q));
-      if (!q && series === "all") {
-        sugg.hidden = true;
-        return;
-      }
-      if (series === "all") pool = pool.slice(0, 20);
+      active = -1;
+      input.removeAttribute("aria-activedescendant");
+      const q = input.value.trim().toLowerCase(), series = $("ts-series-select").value;
+      const pool = DATA.markets.filter(m => (series === "all" || m.series === series) && (!q || m.name.toLowerCase().includes(q) || m.question.toLowerCase().includes(q)));
       sugg.innerHTML = "";
-      pool.forEach((m) => {
-        const b = document.createElement("button");
-        b.type = "button";
-        b.innerHTML = `<span>${esc(m.name)}</span><span class="sser">${esc(shortSeries(m.series))}</span>`;
-        b.addEventListener("mousedown", (e) => {
-          e.preventDefault();
-          addMarket(m.id);
-          input.value = "";
-          sugg.hidden = true;
-          renderTimeSeries();
+      pool.forEach((m, i) => {
+        const b = document.createElement("div");
+        b.id = "suggestion-" + i; b.setAttribute("role", "option"); b.setAttribute("aria-selected", "false");
+        b.setAttribute("aria-disabled", selectedMarkets.includes(m.id));
+        b.innerHTML = `<span>${esc(m.name)}</span><span class="sser">${selectedMarkets.includes(m.id) ? "Selected · " : ""}${esc(shortSeries(m.series))}</span>`;
+        b.addEventListener("pointerdown", e => e.preventDefault());
+        b.addEventListener("click", () => {
+          if (addMarket(m.id)) { input.value = ""; close(); }
+          input.focus();
         });
         sugg.append(b);
       });
-      sugg.hidden = pool.length === 0;
+      if (!pool.length) sugg.innerHTML = '<div class="empty-note">No matching markets. Try another name or series.</div>';
+      sugg.hidden = false; input.setAttribute("aria-expanded", "true");
     };
-
     input.addEventListener("input", update);
-    input.addEventListener("focus", update);
-    input.addEventListener("blur", () => setTimeout(() => (sugg.hidden = true), 150));
-    $("ts-series-select").addEventListener("change", update);
+    input.addEventListener("click", update);
+    input.addEventListener("blur", close);
+    input.addEventListener("keydown", e => {
+      if (e.key === "Escape") { e.preventDefault(); close(); return; }
+      if (!["ArrowDown", "ArrowUp", "Enter"].includes(e.key)) return;
+      if (e.key === "Enter" && sugg.hidden) return;
+      e.preventDefault();
+      if (sugg.hidden) update();
+      const options = [...sugg.querySelectorAll('[role="option"]')];
+      if (!options.length) return;
+      if (e.key === "Enter") { options[Math.max(0, active)].click(); return; }
+      active = (active + (e.key === "ArrowDown" ? 1 : -1) + options.length) % options.length;
+      options.forEach((b, i) => b.setAttribute("aria-selected", i === active));
+      input.setAttribute("aria-activedescendant", options[active].id);
+      options[active].scrollIntoView({block: "nearest"});
+    });
+    $("ts-series-select").addEventListener("change", () => { close(); input.focus(); });
+    $("clear-markets").addEventListener("click", () => { selectedMarkets.length = 0; marketSlots.clear(); close(); renderTimeSeries(); input.focus(); });
+    $("full-season").addEventListener("change", () => { if (selectedMarkets.length) { drawChart(); drawTable(); } });
   }
 
-  function addMarket(id, exclusiveIfFull) {
-    if (selectedMarkets.includes(id)) return;
-    if (selectedMarkets.length >= MAX_LINES) {
-      if (exclusiveIfFull) selectedMarkets.length = 0;
-      else return;
+  function addMarket(id) {
+    if (selectedMarkets.includes(id)) {
+      $("selection-status").textContent = `${selectedMarkets.length}/8 selected · Market already selected`;
+      return false;
     }
+    if (selectedMarkets.length >= MAX_LINES) {
+      $("selection-status").textContent = `${DATA.markets.find(m => m.id === id).name} not added · 8/8 selected; remove a market first`;
+      return false;
+    }
+    const used = new Set(marketSlots.values());
+    marketSlots.set(id, SERIES_COLORS.findIndex((_, slot) => !used.has(slot)));
     selectedMarkets.push(id);
     renderTimeSeries();
+    return true;
   }
 
   function removeMarket(id) {
     const i = selectedMarkets.indexOf(id);
     if (i >= 0) selectedMarkets.splice(i, 1);
+    marketSlots.delete(id);
     renderTimeSeries();
+    $("ts-market-search").focus();
   }
 
   function renderTimeSeries() {
+    $("selection-status").textContent = `${selectedMarkets.length}/8 selected${selectedMarkets.length === 8 ? " · Remove a market to add another" : ""}`;
+    $("clear-markets").disabled = !selectedMarkets.length;
     const chips = $("ts-chips");
     chips.innerHTML = "";
     selectedMarkets.forEach((id, i) => {
       const m = DATA.markets.find((x) => x.id === id);
       const chip = document.createElement("span");
       chip.className = "chip";
-      chip.innerHTML = `<span class="dot" style="background:${SERIES_COLORS[i]}"></span>
+      chip.innerHTML = `${lineKey(id)}
         <span>${esc(m.name)} <span class="chip-series">· ${esc(shortSeries(m.series))}</span></span>`;
       const x = document.createElement("button");
       x.type = "button";
@@ -274,7 +332,8 @@
     $("ts-empty").style.display = empty ? "" : "none";
     $("ts-chart-wrap").style.display = empty ? "none" : "";
     $("ts-table-wrap").innerHTML = "";
-    if (empty) return;
+    $("data-details").hidden = empty;
+    if (empty) { $("chart-range").textContent = ""; return; }
 
     drawChart();
     drawTable();
@@ -282,28 +341,38 @@
 
   function drawTable() {
     const wrap = $("ts-table-wrap");
-    const head = DATA.snapshots.map((s) => `<th title="${esc(s.time)}">${esc(snapLabel(s))}</th>`).join("");
+    const indices = DATA.snapshots.map((_, i) => i).filter(i => i >= chartStart()).reverse();
+    const head = indices.map(i => DATA.snapshots[i]).map((s) => `<th title="${esc(s.time)}">${esc(snapLabel(s))}</th>`).join("");
     const body = selectedMarkets
       .map((id) => {
         const m = DATA.markets.find((x) => x.id === id);
-        const cells = m.prices.map((p) => `<td>${fmt(p)}</td>`).join("");
-        return `<tr><td>${esc(m.name)}</td>${cells}</tr>`;
+        const cells = indices.map(i => m.prices[i]).map((p) => `<td>${fmt(p)}</td>`).join("");
+        return `<tr><th scope="row">${esc(m.name)}</th>${cells}</tr>`;
       })
       .join("");
     wrap.innerHTML = `<table><thead><tr><th>Market (%)</th>${head}</tr></thead><tbody>${body}</tbody></table>`;
+  }
+
+  function chartStart() {
+    const starts = selectedMarkets.map(id => DATA.markets.find(m => m.id === id).prices.findIndex(p => p != null)).filter(i => i >= 0);
+    return $("full-season").checked || !starts.length ? 0 : Math.min(...starts);
   }
 
   function drawChart() {
     const svg = $("ts-chart");
     const wrap = $("ts-chart-wrap");
     const W = Math.max(320, wrap.clientWidth - 10);
-    const H = 420;
+    const H = window.innerWidth <= 720 ? 340 : 420;
     svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
     svg.innerHTML = "";
 
     const markets = selectedMarkets.map((id) => DATA.markets.find((x) => x.id === id));
     const n = DATA.snapshots.length;
-    const pad = { top: 18, right: 48, bottom: 34, left: 44 };
+    const start = chartStart();
+    $("ts-tooltip").hidden = true;
+    $("chart-range").textContent = `${DATA.snapshots[start].label} – ${DATA.snapshots[n - 1].label} · Probabilities (%) · Hover or tap to inspect`;
+    svg.setAttribute("aria-label", `Market probabilities, ${DATA.snapshots[start].label} to ${DATA.snapshots[n-1].label}. Exact values in the data table below.`);
+    const pad = { top: 18, right: 66, bottom: 34, left: 44 };
     const iw = W - pad.left - pad.right;
     const ih = H - pad.top - pad.bottom;
 
@@ -311,7 +380,7 @@
     let yMax = Math.min(100, Math.ceil((Math.max(5, ...allVals) * 1.12) / 5) * 5);
     const yMin = 0;
 
-    const xPos = (i) => pad.left + (n === 1 ? iw / 2 : (i / (n - 1)) * iw);
+    const xPos = (i) => pad.left + (n - start === 1 ? iw / 2 : ((i - start) / (n - 1 - start)) * iw);
     const yPos = (v) => pad.top + ih - ((v - yMin) / (yMax - yMin)) * ih;
 
     const NS = "http://www.w3.org/2000/svg";
@@ -330,26 +399,25 @@
       el("line", { x1: pad.left, x2: W - pad.right, y1: y, y2: y, class: v === 0 ? "axisline" : "gridline" });
       el("text", { x: pad.left - 8, y: y + 4, "text-anchor": "end", class: "ticktext" }, v + "%");
     }
-    // x ticks
-    // evenly spaced (~80px: labels like "Post Week 7" are wide), counted back from the latest snapshot
-    const every = n > 1 ? Math.max(1, Math.ceil(80 / (iw / (n - 1)))) : 1;
-    for (let i = n - 1; i >= 0; i -= every) {
+    // Allow room for NFL labels such as "Post Week 7", counted back from latest.
+    const every = n > 1 ? Math.max(1, Math.ceil(80 / (iw / (n - 1 - start)))) : 1;
+    for (let i = n - 1; i >= start; i -= every) {
       el("text", { x: xPos(i), y: H - pad.bottom + 18, "text-anchor": "middle", class: "ticktext" }, DATA.snapshots[i].label);
     }
 
     // lines + points
     markets.forEach((m, mi) => {
-      const color = SERIES_COLORS[mi];
+      const color = colorFor(m.id);
       let dPath = "";
       let started = false;
       m.prices.forEach((p, i) => {
-        if (p == null) { started = false; return; }
+        if (i < start || p == null) { started = false; return; }
         dPath += `${started ? "L" : "M"}${xPos(i)},${yPos(p)}`;
         started = true;
       });
-      if (dPath) el("path", { d: dPath, stroke: color, class: "series-line" });
+      if (dPath) el("path", { d: dPath, stroke: color, "stroke-dasharray": dashFor(m.id), class: "series-line" });
       m.prices.forEach((p, i) => {
-        if (p == null) return;
+        if (i < start || p == null) return;
         el("circle", { cx: xPos(i), cy: yPos(p), r: 4, fill: color, class: "series-pt" });
       });
     });
@@ -358,16 +426,23 @@
     const labels = markets
       .map((m, mi) => {
         const lastIdx = m.prices.map((p, i) => (p != null ? i : -1)).reduce((a, b) => Math.max(a, b), -1);
-        return lastIdx < 0 ? null : { mi, y: yPos(m.prices[lastIdx]), v: m.prices[lastIdx], name: m.name };
+        return lastIdx < 0 ? null : { mi, id: m.id, x: xPos(lastIdx), endpointY: yPos(m.prices[lastIdx]), y: yPos(m.prices[lastIdx]), v: m.prices[lastIdx], name: m.name };
       })
       .filter(Boolean)
       .sort((a, b) => a.y - b.y);
     for (let i = 1; i < labels.length; i++) {
       if (labels[i].y - labels[i - 1].y < 14) labels[i].y = labels[i - 1].y + 14;
     }
+    for (let i = labels.length - 1; i >= 0; i--) {
+      labels[i].y = Math.min(labels[i].y, i === labels.length - 1 ? H - pad.bottom - 8 : labels[i + 1].y - 14);
+    }
     labels.forEach((L) => {
-      el("text", { x: W - pad.right + 8, y: L.y + 4, fill: SERIES_COLORS[L.mi], class: "end-label" },
-        `${L.v.toFixed(1)}%`);
+      const labelX = W - pad.right + 20;
+      el("path", {d: `M${L.x},${L.endpointY}L${labelX - 4},${L.y}`, fill: "none", stroke: colorFor(L.id), "stroke-width": 1, "stroke-dasharray": dashFor(L.id), class: "label-leader"});
+      const label = el("text", { x: labelX, y: L.y + 4, fill: colorFor(L.id), class: "end-label" }, `${L.v.toFixed(1)}%`);
+      const title = document.createElementNS(NS, "title");
+      title.textContent = `${L.name}: ${L.v.toFixed(1)}%`;
+      label.append(title);
     });
 
     // hover crosshair + tooltip
@@ -375,12 +450,12 @@
     const cross = el("line", { x1: 0, x2: 0, y1: pad.top, y2: H - pad.bottom, class: "crosshair", visibility: "hidden" });
     const overlay = el("rect", { x: pad.left, y: pad.top, width: iw, height: ih, fill: "transparent" });
 
-    overlay.addEventListener("mousemove", (ev) => {
+    const inspect = (ev) => {
       const rect = svg.getBoundingClientRect();
       const mx = ((ev.clientX - rect.left) / rect.width) * W;
       let idx = 0;
       let best = Infinity;
-      for (let i = 0; i < n; i++) {
+      for (let i = start; i < n; i++) {
         const d = Math.abs(xPos(i) - mx);
         if (d < best) { best = d; idx = i; }
       }
@@ -391,18 +466,18 @@
         .map((m, mi) => ({ m, mi, v: m.prices[idx] }))
         .filter((r) => r.v != null)
         .sort((a, b) => b.v - a.v)
-        .map((r) => `<div class="tt-row"><span class="dot" style="background:${SERIES_COLORS[r.mi]}"></span>
+        .map((r) => `<div class="tt-row">${lineKey(r.m.id)}
              <span>${esc(truncate(r.m.name, 22))}</span><span class="v">${r.v.toFixed(1)}%</span></div>`)
         .join("");
-      tooltip.innerHTML = `<div class="tt-date">${esc(snapFull(DATA.snapshots[idx]))}</div>${rowsHtml}`;
+      tooltip.innerHTML = `<div class="tt-date">${esc(snapFull(DATA.snapshots[idx]))}</div>${rowsHtml || "No observations for this date"}`;
       tooltip.hidden = false;
       const wr = wrap.getBoundingClientRect();
-      let left = ev.clientX - wr.left + 16;
-      if (left + 230 > wr.width) left = ev.clientX - wr.left - 240;
-      tooltip.style.left = left + "px";
-      tooltip.style.top = Math.max(8, ev.clientY - wr.top - 30) + "px";
-    });
-    overlay.addEventListener("mouseleave", () => {
+      tooltip.style.left = Math.max(0, Math.min(ev.clientX - wr.left + 12, wr.width - tooltip.offsetWidth - 8)) + "px";
+      tooltip.style.top = Math.max(8, Math.min(ev.clientY - wr.top - 30, wr.height - tooltip.offsetHeight - 8)) + "px";
+    };
+    overlay.addEventListener("pointermove", inspect);
+    overlay.addEventListener("pointerdown", inspect);
+    overlay.addEventListener("pointerleave", () => {
       tooltip.hidden = true;
       cross.setAttribute("visibility", "hidden");
     });
