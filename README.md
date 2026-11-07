@@ -89,3 +89,14 @@ a refresh fails. Shared-name candidates are disambiguated using ESPN athlete
 IDs; name variations are mapped in `docs/app.js`. Candidates absent from the
 current roster cache are still available as individual markets. Historical
 award prices follow the person, including time with previous teams.
+
+## Source coverage
+
+Both exchanges cover all 19 displayed categories, including all eight divisions.
+Kalshi division prices were backfilled at the original timestamps for all 17
+snapshots through Pre Week 9. The build rejects a missing category or incomplete
+team field on either exchange. Individual award candidate lists can differ;
+Average continues to require an observation from each exchange.
+
+See [the coverage audit](docs/SOURCE_COVERAGE.md) for the verified snapshot range
+and category counts.

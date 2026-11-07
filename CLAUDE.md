@@ -44,7 +44,7 @@ the Post snapshot is created, delete the mid-week file and its label entry.
    EOF
    ```
 
-   Both sources are required on every update. Expect at least 420 Kalshi rows and
+   Both sources are required on every update. Expect at least 452 Kalshi rows and
    298 Polymarket rows with 0 missing observations (counts may grow as markets open).
    Investigate missing observations before publishing. Output lands in `snapshots/`.
 2. Add one entry per snapshot to `snapshots/labels.json`
@@ -65,7 +65,10 @@ the Post snapshot is created, delete the mid-week file and its label entry.
 
 - Both source sheets are used. Kalshi uses midpoints; Average requires both source
   observations. Kalshi event mappings are season-specific in `scripts/build_data.py`.
-  AFC/NFC #1 Seed series remain excluded (too illiquid).
+  All 19 displayed categories, including all eight divisions, are required for
+  both exchanges. The data build rejects missing category coverage and incomplete
+  team fields. Award candidate lists differ between exchanges; do not invent
+  prices for unmatched candidates. AFC/NFC #1 Seed series remain excluded (too illiquid).
 - Filename tz is `EDT` or `EST` as the app computes it; the build regex accepts both.
 - Stray or test xlsx files in `snapshots/` get published as extra points on the
   site. Move them out before building.

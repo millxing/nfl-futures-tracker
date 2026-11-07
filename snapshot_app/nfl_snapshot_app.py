@@ -36,6 +36,8 @@ KALSHI_SERIES = [
     "KXSB", "KXNFLAFCCHAMP", "KXNFLNFCCHAMP", "KXNFLMVP", "KXNFLOPOTY",
     "KXNFLDPOTY", "KXNFLOROTY", "KXNFLDROTY", "KXNFLCOTY", "KXNFLCPOTY",
     "KXNFLPLAYOFF",
+    "KXNFLAFCEAST", "KXNFLAFCNORTH", "KXNFLAFCSOUTH", "KXNFLAFCWEST",
+    "KXNFLNFCEAST", "KXNFLNFCNORTH", "KXNFLNFCSOUTH", "KXNFLNFCWEST",
 ]
 
 POLYMARKET_EVENTS = [
@@ -363,7 +365,7 @@ dialog{width:min(500px,calc(100% - 32px));padding:0;border:0;border-radius:7px;b
 @keyframes pulse{to{opacity:.35}}@media(max-width:620px){.shell{width:100%;margin:0}.brand{padding:24px 20px;margin:0}.card{border-radius:0}.top,.action,.source{padding-left:22px;padding-right:22px}.field{grid-template-columns:1fr}.sources{grid-template-columns:1fr}.source+.source{border-left:0;border-top:1px solid var(--line)}}
 </style></head><body><main class="shell"><h1 class="brand">NFL Market Snapshot</h1><section class="card">
 <div class="top"><div class="eyebrow">One moment · two exchanges · one workbook</div><h2>Create a historical snapshot</h2><p>Choose an Eastern date and time. The app collects every configured NFL futures market and saves a two-sheet Excel workbook in the snapshots folder.</p></div>
-<div class="sources"><div class="source kalshi"><strong>11</strong><span>Kalshi series</span></div><div class="source poly"><strong>21</strong><span>Polymarket event groups</span></div></div>
+<div class="sources"><div class="source kalshi"><strong>19</strong><span>Kalshi series</span></div><div class="source poly"><strong>21</strong><span>Polymarket event groups</span></div></div>
 <div class="action"><label for="snapshotTime">Snapshot time (ET)</label><div class="field"><input id="snapshotTime" type="datetime-local"><button id="create">Create Excel snapshot</button></div>
 <div class="status"><span id="dot" class="dot"></span><div><span id="message">Ready. The workbook will be saved in NFL_Information/snapshots.</span><span id="path" class="path"></span></div></div></div></section></main>
 <dialog id="overwrite"><div class="modal"><h3>Replace existing snapshot?</h3><p id="overwriteText"></p><div class="modal-actions"><button id="cancel" class="secondary">Cancel</button><button id="replace" class="danger">Overwrite file</button></div></div></dialog>

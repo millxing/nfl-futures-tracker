@@ -8,6 +8,8 @@ import sys
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'scripts'))
 import build_data as build
+sys.path.insert(0, str(ROOT / "snapshot_app"))
+import nfl_snapshot_app as collector
 
 
 class SourceHistoryTests(unittest.TestCase):
@@ -45,6 +47,33 @@ class SourceHistoryTests(unittest.TestCase):
         with patch.object(build, 'read_sheet', return_value=[]):
             with self.assertRaisesRegex(ValueError, 'Missing or empty Kalshi'):
                 build.merge_kalshi('snapshot.xlsx', {}, {}, set())
+
+    def test_collector_includes_every_mapped_category(self):
+        self.assertEqual({event.rsplit('-', 1)[0] for event in build.KALSHI_EVENTS},
+                         set(collector.KALSHI_SERIES))
+
+    def test_all_categories_have_both_sources_in_every_snapshot(self):
+        data = json.loads((ROOT / 'docs/data/data.json').read_text())
+        self.assertEqual(set(build.KALSHI_EVENTS.values()), set(build.SERIES_ORDER))
+        for i, snapshot in enumerate(data['snapshots']):
+            rows = {m['id']: {'series': m['series'], **{source: m['prices'][source][i]
+                    for source in ('kalshi', 'polymarket')}} for m in data['markets']}
+            build.validate_coverage(rows, snapshot['id'])
+
+    def test_coverage_rejects_partial_division_and_missing_award(self):
+        rows = {}
+        for i, series in enumerate(build.SERIES_ORDER):
+            count = 4 if 4 <= i < 12 else 16 if i in (1, 2) else 32 if i < 4 else 1
+            for j in range(count):
+                rows[f'{i}:{j}'] = {'series': series, 'kalshi': 0, 'polymarket': 0}
+        build.validate_coverage(rows, 'test')
+        rows['4:0']['kalshi'] = None
+        with self.assertRaisesRegex(ValueError, 'kalshi.*AFC East'):
+            build.validate_coverage(rows, 'test')
+        rows['4:0']['kalshi'] = 0
+        rows['12:0']['polymarket'] = None
+        with self.assertRaisesRegex(ValueError, 'polymarket.*MVP'):
+            build.validate_coverage(rows, 'test')
 
     def test_aliases(self):
         for a, b in [('Pat Surtain', 'Patrick Surtain II'), ('Kenneth Walker', 'Kenneth Walker III'),

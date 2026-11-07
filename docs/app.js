@@ -111,7 +111,7 @@
     $("source-note").textContent = source === "average"
       ? "Equal-weight average of Kalshi midpoint and Polymarket price. Both observations required; — means one or both are missing."
       : source === "kalshi"
-      ? "Kalshi bid/ask midpoint. Division markets are not included in these snapshots. — means no observation."
+      ? "Kalshi bid/ask midpoint. — means no observation."
       : "Polymarket historical price. — means no observation.";
   }
 
@@ -352,14 +352,6 @@
       options[active].scrollIntoView({block: "nearest"});
     });
     $("ts-series-select").addEventListener("change", () => {
-      const series = $("ts-series-select").value;
-      const markets = DATA.markets.filter(m => m.series === series);
-      if (markets.length && !markets.some(available) && markets.some(m => m.prices.polymarket.some(p => p != null))) {
-        const polymarket = document.querySelector('input[name="price-source"][value="polymarket"]');
-        polymarket.checked = true;
-        polymarket.dispatchEvent(new Event("change"));
-        $("source-note").textContent = `${shortSeries(series)} has no Kalshi observations. Switched to Polymarket to show available markets.`;
-      }
       input.value = "";
       input.focus();
       update();
@@ -376,13 +368,6 @@
     if (selectedMarkets.length >= MAX_LINES) {
       $("selection-status").textContent = `${DATA.markets.find(m => m.id === id).name} not added · 8/8 selected; remove a market first`;
       return false;
-    }
-    const market = DATA.markets.find(m => m.id === id);
-    if (!available(market) && market.prices.polymarket.some(p => p != null)) {
-      const polymarket = document.querySelector('input[name="price-source"][value="polymarket"]');
-      polymarket.checked = true;
-      polymarket.dispatchEvent(new Event("change"));
-      $("source-note").textContent = `${shortSeries(market.series)} has no Kalshi observations. Switched to Polymarket to show available history.`;
     }
     const used = new Set(marketSlots.values());
     marketSlots.set(id, SERIES_COLORS.findIndex((_, slot) => !used.has(slot)));

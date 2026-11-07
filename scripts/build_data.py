@@ -55,9 +55,11 @@ EXCLUDED_SERIES = {
 # Explicit season mapping prevents future contracts joining this season's prices.
 KALSHI_EVENTS = dict(zip(
     ["KXSB-27", "KXNFLAFCCHAMP-27", "KXNFLNFCCHAMP-27", "KXNFLPLAYOFF-27",
+     "KXNFLAFCEAST-27", "KXNFLAFCNORTH-27", "KXNFLAFCSOUTH-27", "KXNFLAFCWEST-27",
+     "KXNFLNFCEAST-27", "KXNFLNFCNORTH-27", "KXNFLNFCSOUTH-27", "KXNFLNFCWEST-27",
      "KXNFLMVP-27", "KXNFLOPOTY-27", "KXNFLDPOTY-27", "KXNFLOROTY-27",
      "KXNFLDROTY-27", "KXNFLCOTY-27", "KXNFLCPOTY-27"],
-    SERIES_ORDER[:4] + SERIES_ORDER[12:],
+    SERIES_ORDER,
 ))
 NAME_ALIASES = {
     "pat surtain": "Patrick Surtain II",
@@ -116,6 +118,24 @@ def merge_kalshi(path, poly, lookup, team_names):
         price = row["midpoint"]
         result[mid]["kalshi"] = round(float(price) * 100, 1) if row["data_status"] == "ok" and price is not None else None
     return result
+
+
+def validate_coverage(snapshot, label):
+    """Reject missing categories and incomplete team fields for either source."""
+    for series in SERIES_ORDER:
+        rows = [r for r in snapshot.values() if r["series"] == series]
+        expected = None
+        if series in SERIES_ORDER[4:12]:
+            expected = 4
+        elif series in SERIES_ORDER[1:3]:
+            expected = 16
+        elif series in TEAM_SERIES:
+            expected = 32
+        for source in ("kalshi", "polymarket"):
+            observed = [r for r in rows if r[source] is not None]
+            if not observed or (expected is not None and len(observed) != expected):
+                raise ValueError(f"{label}: {source} {series}: {len(observed)} observations; expected {expected or 'at least one'}")
+
 
 FNAME_RE = re.compile(
     r"nfl_markets_snapshot_(\d{4}-\d{2}-\d{2})_(\d{4})_E[SD]T\.xlsx$"
@@ -217,6 +237,7 @@ def main():
             }
         )
         per_snapshot.append(merge_kalshi(path, poly_snapshots[file_idx], lookup, team_names))
+        validate_coverage(per_snapshot[-1], sid)
         print(f"  {sid}: {len(per_snapshot[-1])} markets")
 
     # Collect all markets across snapshots; metadata from latest appearance.
