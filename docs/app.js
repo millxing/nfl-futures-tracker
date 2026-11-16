@@ -418,7 +418,7 @@
   function drawTable() {
     const wrap = $("ts-table-wrap");
     const indices = DATA.snapshots.map((_, i) => i).filter(i => i >= chartStart()).reverse();
-    const head = indices.map(i => DATA.snapshots[i]).map((s) => `<th title="${esc(s.time)}">${esc(snapLabel(s))}</th>`).join("");
+    const head = indices.map(i => DATA.snapshots[i]).map((s) => `<th scope="col" title="${esc(`${snapFull(s)}. Implied probability as a percent using ${sourceLabel()}. — means no observation.`)}">${esc(snapLabel(s))}</th>`).join("");
     const body = selectedMarkets
       .map((id) => {
         const m = DATA.markets.find((x) => x.id === id);
@@ -426,7 +426,7 @@
         return `<tr><th scope="row">${esc(m.name)}</th>${cells}</tr>`;
       })
       .join("");
-    wrap.innerHTML = `<table><thead><tr><th>Market (%)</th>${head}</tr></thead><tbody>${body}</tbody></table>`;
+    wrap.innerHTML = `<table><thead><tr><th scope="col" title="Team or person being priced. Values are implied probabilities as a percent, using the selected price source.">Market (%)</th>${head}</tr></thead><tbody>${body}</tbody></table>`;
   }
 
   function chartStart() {

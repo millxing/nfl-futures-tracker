@@ -72,12 +72,12 @@
     </div>
 
     <div class="movers-header">
-      <span class="col-rank">#</span>
-      <span class="col-name">Market</span>
-      <button type="button" class="col-sort col-from" data-sort="from">From %</button>
-      <button type="button" class="col-sort col-to" data-sort="to">To %</button>
-      <span class="col-bar">Change</span>
-      <button type="button" class="col-sort col-delta" data-sort="delta">Δ pp</button>
+      <span class="col-rank" title="Row number in the current sort order.">#</span>
+      <span class="col-name" title="Team or person and the outcome being priced. Select a row to chart its history.">Market</span>
+      <button type="button" class="col-sort col-from" data-sort="from" title="Implied probability at the From snapshot, as a percent, using the selected price source. Click to sort; click again to reverse the order. — means no observation.">From %</button>
+      <button type="button" class="col-sort col-to" data-sort="to" title="Implied probability at the To snapshot, as a percent, using the selected price source. Click to sort; click again to reverse the order. — means no observation.">To %</button>
+      <span class="col-bar" title="Bar showing To minus From. Right means an increase; left means a decrease. Bar lengths are scaled to the largest change in the filtered list.">Change</span>
+      <button type="button" class="col-sort col-delta" data-sort="delta" title="To minus From in percentage points (pp). A move from 20% to 25% is +5 pp. Click to sort by the size of the change, regardless of sign; click again to reverse the order. — means a comparison observation is missing.">Δ pp</button>
     </div>
     <div id="movers-list" class="movers-list"></div>
   </section>
