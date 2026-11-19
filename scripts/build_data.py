@@ -163,6 +163,19 @@ def auto_label(dt):
     return f"{dt.strftime('%b %-d')}, {hour} ET"
 
 
+def validate_partial_snapshots(snapshots):
+    """Do not publish partials after that week or a later week is complete."""
+    completed_weeks = [int(match.group(1)) for snapshot in snapshots
+                       if not snapshot["partial"]
+                       and (match := re.fullmatch(r"Post Week (\d+)", snapshot["label"]))]
+    latest_completed = max(completed_weeks, default=0)
+    for snapshot in snapshots:
+        match = re.search(r"Week (\d+)$", snapshot["label"])
+        if snapshot["partial"] and match and int(match.group(1)) <= latest_completed:
+            raise ValueError(f"{snapshot['id']}: {snapshot['label']} is obsolete; "
+                             "replace its workbook and label with the final Post snapshot")
+
+
 def read_snapshot(path):
     """Return {market_id: row-dict} for the Polymarket sheet."""
     wb = load_workbook(path, read_only=True, data_only=True)
@@ -239,6 +252,8 @@ def main():
         per_snapshot.append(merge_kalshi(path, poly_snapshots[file_idx], lookup, team_names))
         validate_coverage(per_snapshot[-1], sid)
         print(f"  {sid}: {len(per_snapshot[-1])} markets")
+
+    validate_partial_snapshots(snapshots)
 
     # Collect all markets across snapshots; metadata from latest appearance.
     meta = {}

@@ -81,6 +81,21 @@ class SourceHistoryTests(unittest.TestCase):
             self.assertEqual(build.name_key(a), build.name_key(b))
         self.assertNotEqual(build.name_key('Josh Allen'), build.name_key('Josh Hines-Allen'))
 
+    def test_completed_weeks_reject_obsolete_partials(self):
+        partial = {'id': '2026-11-09_1239', 'label': 'Mid Week 9', 'partial': True}
+        for week in (9, 10):
+            final = {'id': 'final', 'label': f'Post Week {week}', 'partial': False}
+            with self.subTest(completed_week=week):
+                with self.assertRaisesRegex(ValueError, 'Mid Week 9 is obsolete'):
+                    build.validate_partial_snapshots([partial, final])
+
+    def test_current_week_partial_is_allowed(self):
+        build.validate_partial_snapshots([
+            {'id': 'final', 'label': 'Post Week 9', 'partial': False},
+            {'id': 'partial', 'label': 'Mid Week 10', 'partial': True},
+        ])
+        build.validate_partial_snapshots([])
+
 
 if __name__ == '__main__':
     unittest.main()

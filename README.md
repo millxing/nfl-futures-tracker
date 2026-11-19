@@ -48,6 +48,11 @@ Add an entry for every new snapshot — a plain string, or an object with
 Partial snapshots are tagged "(partial)" throughout the site. A snapshot with
 no entry falls back to its timestamp label (the build script warns).
 
+Once a week is complete, replace its partial workbook and label with the final
+`Post Week N` snapshot. Before publishing an update, check all earlier weeks
+for partials that still need final snapshots. The build rejects a partial when
+a final snapshot for that week or a later week is present.
+
 ## Layout
 
 - `snapshot_app/` — local web app that generates a snapshot xlsx for any Eastern
